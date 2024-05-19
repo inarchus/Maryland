@@ -48,10 +48,8 @@ init:
 		jmp main_loop
 
 	end_program:
-
 		hlt
-		jmp end_program
-
+		jmp init
 
 menu_options:
 		mov di, input_line
@@ -100,19 +98,98 @@ menu_options:
 		mov si, reg_dump_string
 		call startswith
 		test ax, ax
+		jz test_enable_a20
+		call display_regdump
+	test_enable_a20:
+		mov di, input_line
+		mov si, enable_a20_cmd
+		call startswith
+		test ax, ax
+		jz test_disable_a20
+		call a20_enable
+		call a20_verify
+	test_disable_a20:
+		mov di, input_line
+		mov si, disable_a20_cmd
+		call startswith
+		test ax, ax
+		jz test_check_a20
+		call a20_disable
+		call a20_verify
+	test_check_a20:
+		mov di, input_line
+		mov si, verify_a20_cmd
+		call startswith
+		test ax, ax
 		jz menu_options_ret
-		call display_regdump				
+		call a20_verify
 	menu_options_ret:
 		ret
+
+
+a20_verify:
+	push ax
+	push dx
+	
+	in al, 0x92
+	test al, 2
+	jnz a20_verify_enabled
+
+	xor dx, dx
+	mov di, a20disstr
+	call writeline_to_screen
+
+	jmp a20_verify_exit
+	a20_verify_enabled:
+
+	xor dx, dx
+	mov di, a20enstr
+	call writeline_to_screen
+
+	a20_verify_exit:
+	pop dx
+	pop ax
+	ret
+
+a20_enable:
+	push ax
+	in al, 0x92						; special a20 enable port
+	test al, 2						; bit 1 must be set to true
+	jnz a20_enable_already_enabled
+	or al, 2
+	and al, 0xFE
+	out 0x92, al
+	a20_enable_already_enabled:
+	pop ax
+	ret
+	
+a20_disable:
+	push ax
+	in al, 0x92
+	test al, 2
+	jz a20_disable_already_disabled
+	and al, 0b1111_1100
+	out 0x92, al
+	a20_disable_already_disabled:
+	pop ax
+	ret
 
 
 display_regdump:
 	; save the stack pointer first since that's going to change a lot during the output process
 	mov [register_values + 8], sp
+	
+	; save the flags next
+	push ax 							; save ax
+	pushf 								;
+	pop ax								;
+	mov [register_values + 28], ax		;
+	pop ax								;
+	
 	push bp
 	push bx
 	mov bp, sp
-	mov bx, [bp + 4]
+	mov bx, [bp]
 	mov [register_values + 30], bx ; currently contains the return address
 	pop bx
 	pop bp
@@ -121,7 +198,7 @@ display_regdump:
 	mov [register_values], ax
 	mov [register_values + 2], bx
 	mov [register_values + 4], cx
-	mov [register_values + 6], dx	
+	mov [register_values + 6], dx
 
 	; sp, bp, si, di
 	mov [register_values + 10], bp
@@ -136,18 +213,90 @@ display_regdump:
 	mov [register_values + 24], fs
 	mov [register_values + 26], gs
 
+	push cx
+	push dx
+
+	mov cx, 22
+	clear_rows_loop:
+		mov di, empty_string
+		mov dh, 22
+		sub dh, cl
+		inc dh
+		xor dl, dl
+		call writeline_to_screen
+		loop clear_rows_loop
+
+	mov cx, 16
+
+	push bx
 	push ax
-	pushf
+	push si
+
+	mov si, reg_names
+	mov bx, register_values
+	regdump_display_loop:
+		push cx
+		mov ax, [bx]
+		add bx, 2
+		
+		mov di, si
+		mov dh, 16
+		sub dh, cl
+		inc dh
+		xor dl, dl
+		call write_string_to_screen
+		
+		mov di, hex_out_str
+		call word_to_hexstr
+		
+		push dx
+		mov dh, 16
+		sub dh, cl
+		inc dh
+		mov dl, 4
+		call writeline_to_screen
+		pop dx
+		
+		add si, 3
+		pop cx
+	loop regdump_display_loop
+	pop si
 	pop ax
-	mov [register_values + 28], ax
-	pop ax	
-	
-	
-	
+	pop bx
+	pop dx
+	pop cx
 	ret
 
-value_to_hex:
+word_to_hexstr:
+	; put the value in the ax register
+	; put a string of appropriate length in di, i guess technically it only needs 7 max with the null terminator too.  
+	push ax
+	push bx
+	push cx
+	push di
 
+	mov word [di], '0x'
+	add di, 5
+	mov cx, 4
+	word_to_hexstr_loop:
+		mov bx, ax
+		and bx, 0xF 			; get the lowest current nibble
+		add bl, '0'
+		cmp bl, '0' + 10
+		jb word_to_hexstr_bypass
+		add bl, 'a' - 10 - '0'
+		word_to_hexstr_bypass:
+		mov [di], bl
+		shr ax, 4
+		dec di
+	loop word_to_hexstr_loop
+	pop di
+	
+	mov byte [di + 6], 0  			; set the null terminator 
+	
+	pop cx
+	pop bx
+	pop ax
 	ret
 
 
@@ -667,15 +816,23 @@ section .data
 
 	hex_dump_str db 'hexdump', 0 	; get a hexdump of 512 bytes
 	hex_dump_str_len equ $ - hex_dump_str
+ 
+	verify_a20_cmd db "verify a20", 0
+	enable_a20_cmd db "enable a20", 0
+	disable_a20_cmd db "disable a20", 0
 
 	reg_dump_string db 'regdump', 0
 	reg_dump_string_len equ $ - reg_dump_string
 
 	special_string db "This is a special string that I want to test out", 0
+	a20enstr 	db	"a20 is currently enabled.", 0
+	a20disstr 	db	"a20 is currently disabled.", 0 
+	
+	reg_names db 'ax', 0, 'bx', 0, 'cx', 0, 'dx', 0, 'sp', 0, 'bp', 0, 'si', 0, 'di', 0, 'ss', 0, 'cs', 0, 'ds', 0, 'es', 0, 'fs', 0, 'gs', 0, 'fl', 0, 'ip', 0
 
 	boot_segment equ 0x800
 
 section .bss
 	input_line resb 80
 	register_values resw 16
-
+	hex_out_str resb 6

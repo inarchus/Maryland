@@ -7,6 +7,8 @@ init:
 	xor ax, ax
 	mov es, ax
 	mov ds, ax
+	mov fs, ax
+	mov gs, ax
 	mov ss, ax
 	mov sp, 0x7ffe ; set up the stack so that it can descend.  
 	
@@ -125,7 +127,6 @@ menu_options:
 		test ax, ax
 		jz test_enter_protected
 		call a20_verify
-		
 	test_enter_protected:
 		mov di, input_line
 		mov si, enter_protected_mode_str
@@ -336,20 +337,35 @@ word_to_hexstr:
 display_hexdump:
 	; di is already inputline
 	push di
+	push ax
+	push bx
 	mov ax, hex_dump_str_len
 	call hexchar_address_to_value
 	mov di, ax
 	call hex_dump
+	pop bx
+	pop ax
 	pop di
 	ret
 
 
 execute_from_location:
+	mov ax, 4						; 'exec ' should start at index 4 for searching for the address
+	call hexchar_address_to_value	;
+	add sp, 4 ; 'unwind' the call stack manually
+	test bx, 0x000f					; if there is no segment
+	jnz exec_loc_bypass				; do a near call
+	push bx							; else do a far call with segment
+	push ax
+	retf
+	exec_loc_bypass:
+	push ax
 	ret
+
 
 load_from_floppy:
 	;  	     	       disk  drive  track sector  n_sectors	dest_seg	location
-	; format: fdload DD    VV      TT     SS	NN		   EEEE	LLLL
+	; format: fdload DD    VV      TT     SS	NN		   EEEE:LLLL
 	; call read_floppy
 	ret
 	
@@ -424,6 +440,11 @@ get_location:
 	
 	pop bx
 	mov ax, bx
+	cmp bl, 0x0f
+	jne get_loc_use_segment
+	mov ax, es
+	get_loc_use_segment:
+		
 	lea di, hex_out_str
 	call word_to_hexstr_no_prefix
 	
@@ -439,15 +460,33 @@ get_location:
 set_location:
 	; di has the input string
 	; write has an offset of 5 or so.  
+	mov ax, 5						; starting offset to bypass 'write '
+	call hexchar_address_to_value
+	; bx will have the segment or 0x000f, ax will have the location
+	; then we need to use cx which hopefully works to get the next value
+	push dx
 
-	mov dx, 0x28
-	mov di, write_string
-	call string_length
-	mov cx, ax
-	mov bp, di
-	mov bx, 0x010f 
-	mov ax, 0x1300
-	int 0x10
+	push ax
+	push bx
+
+	mov ax, cx
+	call hexchar_address_to_value
+	mov dx, ax
+	pop bx
+	pop ax
+
+	push es
+	push es
+	pop fs
+	test bx, 0x000f
+	jnz set_location_skip_segment
+	mov fs, bx
+	set_location_skip_segment:
+	mov bx, ax
+	mov word [fs:bx], dx
+	pop fs
+
+	pop dx
 	ret
 	
 
@@ -540,9 +579,9 @@ hexchar_address_to_value:
 
 	hatv_found_colon:
 		
-		mov di, found_colon_string
-		mov dx, 0x0400
-		call writeline_to_screen
+		; mov di, found_colon_string
+		; mov dx, 0x0400
+		; call writeline_to_screen
 		
 		pop cx			; finish the loop by popping cx
 	hatv_found_colon_bypass_pop:
@@ -642,18 +681,24 @@ hex_dump:
 	mov dx, 0x0100
 	sub dx, 3
 	
+	push fs
 	push si
+	
+	test bx, 0x000f
+	jnz hexdump_bypass_segment
+	mov fs, bx
+	hexdump_bypass_segment:
 	
 	hex_dump_loop:
 		push cx
 		push di
 		push dx
 		
-		mov dl, [di]
+		mov dl, [fs:di]
 		lea si, [out_num + 1]
 		call convert_nibble_to_ascii
 		
-		mov dl, [di]
+		mov dl, [fs:di]
 		shr dl, 4
 		lea si, [out_num]
 		call convert_nibble_to_ascii
@@ -675,6 +720,7 @@ hex_dump:
 		loop hex_dump_loop
 	
 	pop si
+	pop fs
 	
 	ret
 

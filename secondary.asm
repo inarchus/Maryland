@@ -52,6 +52,8 @@ init:
 		jmp init
 
 menu_options:
+
+	test_set_location: ; not currently used but we'll do it for symmetry
 		mov di, input_line
 		mov si, write_string
 		call startswith
@@ -121,14 +123,39 @@ menu_options:
 		mov si, verify_a20_cmd
 		call startswith
 		test ax, ax
-		jz menu_options_ret
+		jz test_enter_protected
 		call a20_verify
+		
+	test_enter_protected:
+		mov di, input_line
+		mov si, enter_protected_mode_str
+		call startswith
+		test ax, ax
+		jz menu_options_ret
+		call enter_protected_mode
 	menu_options_ret:
 		ret
 
 
+enter_protected_mode:
+	call a20_verify
+	test ax, ax
+	jz enter_protected_mode_return
+	
+	cli ; disable interrupts
+	
+	lgdt [gdtable]
+	
+	mov eax, cr0
+	or al, 1
+	mov cr0, eax
+	
+	enter_protected_mode_return:
+	ret
+
+
 a20_verify:
-	push ax
+	; returns the status in ax 0 = disabled, 1 = enabled
 	push dx
 	
 	in al, 0x92
@@ -138,20 +165,19 @@ a20_verify:
 	xor dx, dx
 	mov di, a20disstr
 	call writeline_to_screen
-
+	xor ax, ax
 	jmp a20_verify_exit
 	a20_verify_enabled:
 
 	xor dx, dx
 	mov di, a20enstr
 	call writeline_to_screen
-
+	inc ax
 	a20_verify_exit:
 	pop dx
-	pop ax
 	ret
 
-a20_enable:
+a20_enable:							;https://wiki.osdev.org/A20_Line
 	push ax
 	in al, 0x92						; special a20 enable port
 	test al, 2						; bit 1 must be set to true
@@ -168,7 +194,7 @@ a20_disable:
 	in al, 0x92
 	test al, 2
 	jz a20_disable_already_disabled
-	and al, 0b1111_1100
+	and al, 0xfc ; 0b1111_1100
 	out 0x92, al
 	a20_disable_already_disabled:
 	pop ax
@@ -267,6 +293,13 @@ display_regdump:
 	pop cx
 	ret
 
+word_to_hexstr_no_prefix:
+	push ax
+	push bx
+	push cx
+	push di
+	sub di, 2
+	jmp word_to_hex_bypass_prefix
 word_to_hexstr:
 	; put the value in the ax register
 	; put a string of appropriate length in di, i guess technically it only needs 7 max with the null terminator too.  
@@ -276,6 +309,9 @@ word_to_hexstr:
 	push di
 
 	mov word [di], '0x'
+	
+	word_to_hex_bypass_prefix:
+	mov byte [di + 6], 0  			; set the null terminator 
 	add di, 5
 	mov cx, 4
 	word_to_hexstr_loop:
@@ -290,10 +326,7 @@ word_to_hexstr:
 		shr ax, 4
 		dec di
 	loop word_to_hexstr_loop
-	pop di
-	
-	mov byte [di + 6], 0  			; set the null terminator 
-	
+	pop di	
 	pop cx
 	pop bx
 	pop ax
@@ -333,17 +366,80 @@ write_floppy:
 	ret
 
 get_location:
-	mov dx, 0x28
-	mov di, read_string
-	call string_length
-	mov cx, ax
-	mov bp, di
-	mov bx, 0x010f 
-	mov ax, 0x1300
-	int 0x10
+	; di has the input string
+	; read has an offset of 4 or so.  
+	push bp
+	mov bp, sp
+	; create some local variable space (10 bytes)
+	push ax
+	push di
+	
+	mov ax, 4						; starting offset to bypass 'read '
+	call hexchar_address_to_value
+	push ax
+	mov ax, bx
+	lea di, hex_out_str
+	call word_to_hexstr_no_prefix
+	
+	mov dx, 0x0200
+	lea di, hex_out_str
+	call writeline_to_screen
+	pop ax
+	push bx
+	push ax
+	push es
+	and bl, 0x0f
+	jnz get_location_bypass_segment
+		mov es, bx
+	get_location_bypass_segment:
+	mov bx, ax
+	mov ax, [es:bx]
+	lea di, hex_out_str
+	call word_to_hexstr_no_prefix
+	pop es
+
+	mov dx, 0x0100
+	mov di, read_location_str
+	call writeline_to_screen
+
+	mov dx, 0x011a
+	lea di, hex_out_str
+	call write_string_to_screen
+
+	pop ax
+	; ax should contain the value to convert back to hex for no reason...
+	lea di, hex_out_str
+	call word_to_hexstr_no_prefix
+	
+	mov dx, 0x0112
+	lea di, hex_out_str
+	call write_string_to_screen
+
+	pop bx
+	push bx
+	and bl, 0x0f
+	jz hatf_skip_es
+		mov bx, es
+	hatf_skip_es:
+	
+	pop bx
+	mov ax, bx
+	lea di, hex_out_str
+	call word_to_hexstr_no_prefix
+	
+	mov dx, 0x010d
+	lea di, hex_out_str
+	call write_string_to_screen
+	
+	pop di
+	pop ax
+	pop bp
 	ret
 
 set_location:
+	; di has the input string
+	; write has an offset of 5 or so.  
+
 	mov dx, 0x28
 	mov di, write_string
 	call string_length
@@ -402,9 +498,14 @@ startswith:
 
 hexchar_address_to_value:
 	; di will have the location of the string
-	; ax will have an offset
+	; ax will have a returned value
+	; bx will have the segment 
+	; cx will have the last index 
 	push si
+	push di
 	mov si, di
+	mov bx, 0x000f	; if this is returned then the segment is not set
+	push bx
 	
 	add si, ax
 	
@@ -416,29 +517,50 @@ hexchar_address_to_value:
 	jnz next_non_hex
 
 	dec si ; go back one because it's a hex character
-	push bx
 	xor bx, bx
 	mov cx, 4
 	next_hex:
 		push cx
-		mov al, byte [si] 		; scan through non hex 
+		mov al, byte [si] 		; scan through hex 
+		cmp al, ':'				; if we find a colon, count that as the segment
+		je hatv_found_colon
 		call hexchar_to_int
 		test ah, ah
 		jnz exit_hexchar_addr_to_val_fail
 		shl bx, 4				; the first shift left will multiply zero by 16
-		add bx, ax			; add the value into bx
+		add bx, ax				; add the value into bx
 		inc si
 		pop cx
 		loop next_hex
-
+		
+	mov al, byte [si] 		; scan through hex 
+	cmp al, ':'
+	je hatv_found_colon_bypass_pop
 	jmp bypass_hatvf
-	exit_hexchar_addr_to_val_fail:
-		pop cx
-	
-	bypass_hatvf:
 
-		mov ax, bx
-		pop bx
+	hatv_found_colon:
+		
+		mov di, found_colon_string
+		mov dx, 0x0400
+		call writeline_to_screen
+		
+		pop cx			; finish the loop by popping cx
+	hatv_found_colon_bypass_pop:
+		inc si			; go past the colon and start with the next hex
+		add sp, 2		; pop the old value for bx, but don't overwrite bx
+		push bx			; push the segment address
+		xor bx, bx		; start over again with the calculation
+		mov cx, 4		; restart the loop looking for 4 hexits
+		jmp next_hex
+
+	exit_hexchar_addr_to_val_fail:
+		pop cx			; restore cx, jumping out of the loop so won't pop cx
+	bypass_hatvf:
+		mov ax, bx		; mov the result from bx into ax
+		pop bx			; popping bx restores the segment or 0x000f
+		pop di			; restore di if it's been modified
+		mov cx, si		; calculate the index of the last address we've reached
+		sub cx, di		; subtract the initial index of the string
 		pop si
 	ret
 
@@ -725,7 +847,7 @@ writechar:
 
 
 writeline_to_screen:
-	push sp
+	push bp
 	mov bp, sp
 	mov word [bp - 2], 0xffff
 	jmp write_and_blank
@@ -794,7 +916,7 @@ write_string_to_screen:
 	pop si ; (1)
 	mov di, [bp - 4]
 	add sp, 4
-	pop sp
+	pop bp
 	ret
 
 section .data
@@ -821,6 +943,8 @@ section .data
 	enable_a20_cmd db "enable a20", 0
 	disable_a20_cmd db "disable a20", 0
 
+	enter_protected_mode_str db "enter protected mode", 0
+
 	reg_dump_string db 'regdump', 0
 	reg_dump_string_len equ $ - reg_dump_string
 
@@ -830,8 +954,23 @@ section .data
 	
 	reg_names db 'ax', 0, 'bx', 0, 'cx', 0, 'dx', 0, 'sp', 0, 'bp', 0, 'si', 0, 'di', 0, 'ss', 0, 'cs', 0, 'ds', 0, 'es', 0, 'fs', 0, 'gs', 0, 'fl', 0, 'ip', 0
 
+	read_location_str db "The value at SSSS:AAAA is XXXX", 0
+
+	found_colon_string db "We have found a colon", 0
+
 	boot_segment equ 0x800
 
+	gdtable:
+		.Null equ $ - gdtable
+			dq 0
+		.Code equ $ - gdtable
+			dq 0
+		.Data equ $ - gdtable
+			dq 0
+		.UserCode equ $ - gdtable
+			dq 0
+		.UserData equ $ - gdtable
+			dq 0
 section .bss
 	input_line resb 80
 	register_values resw 16

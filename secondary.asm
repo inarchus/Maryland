@@ -1,5 +1,15 @@
+;	Next step, replace int 0x16 with PS/2 driver
+;	Then replace floppy int 0x13 with floppy controller in/out commands.  
+;	Then we should be ready to go to 32 bit mode once we fully understand those things and can load and write to a floppy, print and get input from the keyboard
+;	build a GDT and then finish executing the protected mode jump.  
+
 [bits 16]
 [segment 0x8000]
+
+extern kernel_loader_entry
+extern single_scan_code_map
+;extern calculate_position
+;extern move_cursor_to_position
 
 section .text
 
@@ -21,10 +31,8 @@ init:
 	out 0x64, al
 	
 	main_loop:
-		
 		mov dx, 0x1700 ; mov dh, 23 ; mov dl, 0
-		mov ah, 0x02
-		int 0x10 ; move the cursor to the position
+		call move_cursor_to_position 		; mov ah, 0x02 		; int 0x10 ; move the cursor to the position
 		
 		mov di, input_line
 		call getline
@@ -132,10 +140,90 @@ menu_options:
 		mov si, enter_protected_mode_str
 		call startswith
 		test ax, ax
-		jz menu_options_ret
+		jz test_measure_low_ram
 		call enter_protected_mode
+	test_measure_low_ram:
+		mov di, input_line
+		mov si, measure_low_ram_string
+		call startswith
+		test ax, ax
+		jz test_measure_high_memory
+		call measure_low_memory		
+	test_measure_high_memory:
+		mov di, input_line
+		mov si, measure_high_ram_string
+		call startswith
+		test ax, ax
+		jz test_get_cpuid
+		call measure_high_memory
+	test_get_cpuid:
+		mov di, input_line
+		mov si, cpuid_string
+		call startswith
+		test ax, ax
+		jz menu_options_ret
+		call get_cpu_info		
 	menu_options_ret:
 		ret
+
+
+get_cpu_info:
+	push bp
+	mov bp, sp
+	
+	sub sp, 16
+	
+	xor eax, eax
+	cpuid
+	
+	mov [bp - 16], ebx
+	mov [bp - 12], edx
+	mov [bp - 8], ecx
+	mov [bp - 4], dword 0x0
+	
+
+	mov dx, 0x0200
+	lea di, [bp - 16]
+	call writeline_to_screen
+	
+	add sp, 16
+	leave
+	ret
+
+measure_high_memory:
+	xor cx, cx
+	xor dx, dx
+	mov ax, 0xe801 		; memory detection
+	int 0x15
+	push dx
+	mov ax, cx
+	mov di, hex_out_str
+	call word_to_hexstr
+	mov dx, 0x0100 
+	mov di, hex_out_str
+	call writeline_to_screen
+	pop dx
+	mov ax, dx
+	mov di, hex_out_str
+	call word_to_hexstr
+	mov dx, 0x0200 
+	mov di, hex_out_str
+	call writeline_to_screen
+	
+	ret
+
+
+measure_low_memory:
+	clc
+	int 0x12
+	mov di, hex_out_str
+	call word_to_hexstr
+	
+	mov dx, 0x0100 
+	mov di, hex_out_str
+	call writeline_to_screen
+		
+	ret
 
 
 enter_protected_mode:
@@ -143,17 +231,68 @@ enter_protected_mode:
 	test ax, ax
 	jz enter_protected_mode_return
 	
+	; call get_char
 	cli ; disable interrupts
 	
-	lgdt [gdtable]
+	; call get_char	
+	;mov eax, gdt_end
+	xor ax, ax
+	mov ds, ax
+	lgdt [gdt_end]
 	
+	; call get_char
 	mov eax, cr0
 	or al, 1
 	mov cr0, eax
 	
+	; call get_char
+	jmp 0x8:kernel_entry
+	
 	enter_protected_mode_return:
 	ret
 
+get_char:
+	wait_for_a1:		; waiting for the a character (probably could make it the same position since it is)
+	wait_for_char:		; waiting for the status register's first bit to be 1
+	in al, 0x64			; get the status register from the ps2 keyboard
+	and al, 1			; test for the first bit to be 1
+	jz wait_for_char	; jump back if not
+	in al, 0x60			; get the scan code
+	cmp al, 0x1e		; test the scan code (A pressed)
+	jne wait_for_a1		; jump if not.  
+	ret
+
+
+move_cursor_to_position: 
+	; https://wiki.osdev.org/Text_Mode_Cursor
+	; put the cursor position in dx
+	call calculate_position
+	push edx
+	push eax
+	push ebx
+	mov ebx, 0x0e0f
+	
+	mov edx, 0x03d4
+	push eax
+	mov al, bl
+	out dx, al ; 0x03d4 : 0x0f
+	pop eax
+
+	inc dx
+	out dx, al ; 0x03d5 : low word of position address
+
+	dec dx
+	mov al, bh
+	out dx, al ; 0x03d4 : 0x0e
+
+	inc dx
+	shr ax, 8
+	out dx, al ; 0x03d5 : high word of position address
+
+	pop ebx
+	pop eax
+	pop edx
+	ret
 
 a20_verify:
 	; returns the status in ax 0 = disabled, 1 = enabled
@@ -365,8 +504,48 @@ execute_from_location:
 
 load_from_floppy:
 	;  	     	       disk  drive  track sector  n_sectors	dest_seg	location
-	; format: fdload DD    VV      TT     SS	NN		   EEEE:LLLL
+	; format: fdload 	DD    VV      TT     SS	  NN		   			SEG:ADDR
+	; set the disk and drive by default to start, allow Track:Sector Num_Sectors SEG:ADDR
+	push bp
+	push es
+	mov bp, sp
+	
+	mov ax, 7
+	call hexchar_address_to_value
+	mov ah, bl
+	push ax
+	
+	mov ax, cx
+	call hexchar_address_to_value
+	mov es, bx
+	mov bx, ax
+	mov ah, 0x02			; read from floppy ah = 2 - two sectors al = 1
+	mov al, 0x01
+	xor dx, dx				; dx high word is the head (side of the disk, 1 indexed, lies, 0 indexed), low word is the drive  (0 indexed = fda, 1 = fdb)
+
+	pop cx					; cx high word is the track, low word is the sector
+	
+	int 0x13	 				; read from floppy disk drive
+	
 	; call read_floppy
+	pop es
+	pop bp
+	ret
+	
+read_floppy:
+	; input al as the number of sectors to read
+	; di is the destination index
+	; si is the TT:SS of track and sector in high and low word
+
+	xor ah, ah				
+	mov ah, 0x02
+	mov dx, 0x0000 			; dx high word is the head (side of the disk, 1 indexed, lies, 0 indexed), low word is the drive  (0 indexed = fda, 1 = fdb)
+	mov cx, si 				; cx high word is the track, low word is the sector
+	xor bx, bx				; clear the segment for the initial assembly reads
+read_floppy_exec:
+	mov es, bx
+	mov bx, di 				; bx contains the location to write in the segment es:bx
+	int 0x13	 				; read from floppy disk drive
 	ret
 	
 	
@@ -658,23 +837,6 @@ string_length:
 	ret
 
 
-read_floppy:
-	; input al as the number of sectors to read
-	; di is the destination index
-	; si is the TT:SS of track and sector in high and low word
-
-	xor ah, ah				
-	mov ah, 0x02
-	mov dx, 0x0000 			; dx high word is the head (side of the disk, 1 indexed, lies, 0 indexed), low word is the drive  (0 indexed = fda, 1 = fdb)
-	mov cx, si 				; cx high word is the track, low word is the sector
-	xor bx, bx				; clear the segment for the initial assembly reads
-read_floppy_exec:
-	mov es, bx
-	mov bx, di 				; bx contains the location to write in the segment es:bx
-	int 0x13	 				; read from floppy disk drive
-	ret
-
-
 hex_dump:
 	; di should contain the address of the 512 block to read.
 	mov cx, 512
@@ -734,6 +896,9 @@ convert_nibble_to_ascii:
 	mov [si], dl
 	ret
 
+getchar_pressed:
+	ret
+
 getline:
 	push cx
 	push bx
@@ -749,8 +914,9 @@ getline:
 		
 		mov dh, 23
 		mov dl, bl
-		mov ah, 0x02
-		int 0x10 ; move the cursor to the position				
+		call move_cursor_to_position ;		mov ah, 0x02		int 0x10 ; move the cursor to the position				
+		
+		; call getchar_pressed
 		
 		xor ah, ah
 		int 0x16 ; get a character (wait for input, result goes into al I think?)
@@ -769,13 +935,8 @@ getline:
 		push bx
 		push ax
 		
-		mov ah, 0x0a	; output character
-		mov bx, 0x000f	; setting color to white
-		mov cx, 1 ; number of times to write the character
-		int 0x10 ; character should already be in al
+		call writechar
 		
-		;; display the hex code in al to the screen on line 24
-
 		pop ax
 
 		skip_out:
@@ -822,14 +983,10 @@ getline:
 		
 		mov dh, 23
 		mov dl, bl
-		mov ah, 0x02
-		int 0x10 ; move the cursor to the position
+		call move_cursor_to_position
 
-		mov ah, 0x0a	; output character
-		mov al, 0x20 ; space
-		mov bx, 0x000f	; setting color to white
-		mov cx, 1 ; number of times to write the character
-		int 0x10 ; character should already be in al
+		mov al, 0x20
+		call writechar
 
 		pop bx
 		dec bx ; counter the increment later.
@@ -838,41 +995,45 @@ getline:
 		jmp skip_out
 
 
-calculate_address_from_position:
+calculate_position:
 	; dx has the position (dh = row, dl = col)
-	; returns in ax
-	push bx
-	movzx ax, dh
+	; returns in [e]ax
+	xor eax, eax
+	push ebx
+	movzx eax, dh
 	mov bl, 80
 	mul bl
-	movzx bx, dl
-	add ax, bx
-	pop bx
+	movzx ebx, dl
+	add eax, ebx
+	pop ebx
 	ret
+
 
 writechar_with_format:
 	; ah will have the format
-	push cx
+	push cx 					;0cx
 	mov cx, 0xff
 	jmp writechar_bypass_push
 writechar:
-	push cx ;0
+	push cx 					;0cx
 	xor cx, cx ; set cx to zero for now
 	writechar_bypass_push:
 	; al will have the character
 	; dx has the position (dh = row, dl = col)
-	push ax ;1
-	push bx ;2
-	call calculate_address_from_position
-	mov bx, ax
+	push es	;1es
+	push bx ;3bx
+	push ax ;2ax
 	
-	push si ;3
-	mov si, es
-	push si ;4
-	mov si, 0xb800
-	mov es, si
-	test cx, cx
+	call calculate_position
+	shl ax, 1		; multiply the address by 2 given the format:char words.  
+	mov bx, ax	
 
+	push word 0xb800 	; 4word
+	pop es				; 4es
+
+	pop ax
+
+	test cx, cx
 	jz writechar_byte
 		mov [es:bx], ax
 	jmp writechar_unwind
@@ -882,13 +1043,9 @@ writechar:
 		mov byte [es:bx], 0x0f ; default format, perhaps set this
 	writechar_unwind:
 
-	pop si ;4
-	mov es, si
-	pop si ;3
-	
-	pop bx ;2
-	pop ax ;1
-	pop cx ;0
+	pop bx ;3bx
+	pop es ;1es
+	pop cx ;0cx
 	ret
 
 
@@ -916,7 +1073,7 @@ write_string_to_screen:
 	call string_length ; call string length before changing es
 	mov cx, ax
 
-	call calculate_address_from_position
+	call calculate_position
 	mov di, ax
 	shl di, 1
 
@@ -965,6 +1122,18 @@ write_string_to_screen:
 	pop bp
 	ret
 
+[bits 32]
+kernel_entry:
+	mov esp, 0x090000
+	mov ax, 0x10
+	mov es, ax
+	mov ds, ax
+	mov fs, ax
+	mov gs, ax
+	mov ss, ax
+
+	jmp kernel_loader_entry
+
 section .data
 	reading_str db "reading", 0
 	reading_str_len equ $ - reading_str
@@ -995,6 +1164,8 @@ section .data
 	reg_dump_string_len equ $ - reg_dump_string
 
 	special_string db "This is a special string that I want to test out", 0
+	
+	protected_mode_string db "We have entered protected mode", 0
 	a20enstr 	db	"a20 is currently enabled.", 0
 	a20disstr 	db	"a20 is currently disabled.", 0 
 	
@@ -1003,20 +1174,30 @@ section .data
 	read_location_str db "The value at SSSS:AAAA is XXXX", 0
 
 	found_colon_string db "We have found a colon", 0
-
-	boot_segment equ 0x800
+	measure_low_ram_string db "measure low memory", 0
+	measure_high_ram_string db "measure high memory", 0
+	cpuid_string db "cpuid", 0
 
 	gdtable:
-		.Null equ $ - gdtable
-			dq 0
-		.Code equ $ - gdtable
-			dq 0
-		.Data equ $ - gdtable
-			dq 0
-		.UserCode equ $ - gdtable
-			dq 0
-		.UserData equ $ - gdtable
-			dq 0
+			dq 0 				; null descriptor
+		gdt_code_seg:			; code descriptor
+			dw 0xFFFF			; limit lowest 16 bits
+			dw 0x0				; base lowest 16 bits
+			db 0x0 				; base second part
+			db 10011011b		; access bits
+			db 1111_1100b		; low nibble = flags, high nibble = more of the limit
+			db 0x0 ; high part of the base
+		gdt_data_seg:				; data descriptor
+			dw 0xFFFF			; limit lowest 16 bits
+			dw 0x0				; base lowest 16 bits
+			db 0x0 				; base second part
+			db 10010011b		; access bits
+			db 1111_1100b		; low nibble = flags, high nibble = more of the limit
+			db 0x0 ; high part of the base
+		gdt_end:
+		gdtable_size 	dw 		$ - gdtable - 1 		; limit (Size of GDT)
+		dd gdtable
+
 section .bss
 	input_line resb 80
 	register_values resw 16

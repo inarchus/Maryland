@@ -1,9 +1,10 @@
+; still to do with keyboard driver: fix the function keys, scroll lock, pause, caps lock probably too
+
 [bits 32]
 
 extern kernel_loader_entry
 extern single_scan_code_map
 extern getchar_pressed
-extern translate_scancode
 ;extern calculate_position
 	; position desired in dx, returned in ax as offset
 ;extern move_cursor_to_position
@@ -19,36 +20,26 @@ kernel_loader_entry:
 		stosw
 		test al, al
 		jnz kernel_print_loop
-
-
-	kernel_print_preloop:
-	
-	call getchar
-	mov dx, 0x0040
-	test ah, 1
-	jz skip_print
-	test al, al
-	jz skip_print
-	cmp al, 0x1b
-	je exit_loop
-	call printchar
-	skip_print:
-	
-	jmp kernel_print_preloop
-	exit_loop:
 	
 	mov dx, word 0x0100
 	continue_getlining:
-	
-	mov edi, instring
-	
-	push edx
-	call getline
-	mov edx, [esp]
-	add dh, 1
-	mov esi, instring
-	call printstr
-	pop edx
+		mov edi, instring
+		push edx
+		inc dh
+		push edx
+		mov esi, empty_string
+		call printline
+		pop edx
+		call getline
+		mov dx, 0x0000
+		mov esi, instring
+		call printline
+		pop edx
+		inc dh
+		cmp dh, 0x17
+		jb skip_reset
+			xor dh, dh
+		skip_reset:
 	jmp continue_getlining
 	
 
@@ -84,23 +75,11 @@ move_cursor_to_position:
 	ret
 
 
-getchar_pressed:
-	call getchar
-	cmp al, 0x58
-	ja getchar_pressed
-	and al, 0x7f
-	test al, al
-	jz getchar_pressed
-	ret
-	
-getchar:
-	wait_for_char:
-		in al, 0x64
-		test al, 1
-		jz wait_for_char
-	in al, 0x60
-	call translate_scancode
-	ret
+
+		
+
+
+BACKSPACE equ 0x08
 
 getline:
 	; edi will have the pointer to the string
@@ -110,11 +89,13 @@ getline:
 	getline_loop:
 		push ecx
 		push edx
-		
 		call getchar_pressed
-		stosb
-		cmp byte [edi - 1], 0x0a
+		cmp al, BACKSPACE
+		je getline_backspace
+		cmp al, 0x0a
 		je getline_return
+
+		stosb
 		mov edx, [esp]
 		call printchar
 		pop edx		
@@ -125,23 +106,48 @@ getline:
 			inc dh
 		getline_no_linefeed:
 		push edx
+		getline_resume:
 		call move_cursor_to_position
 		pop edx
 		pop ecx
 		loop getline_loop
-		
+	
 	getline_return:
 		pop edx
 		pop ecx
-		mov byte [edi - 1], 0x0
-
+		mov byte [edi], 0x0
 	ret
+
+	getline_backspace:
+		mov ax, 0x0f20
+		pop edx
+		test dl, dl
+		jz getline_backspace_previous_line
+		dec dl
+		jmp getline_backspace_no_line_reset
+		getline_backspace_previous_line:
+		mov dl, 79
+		dec dh
+		getline_backspace_no_line_reset:
+		push edx
+		call printchar
+		dec edi
+		jmp getline_resume
+
 
 printline:
-	ret
+	push ebp
+	mov ebp, esp
+	mov byte [ebp - 4], 1
+	jmp printline_start
 printstr:
 	; esi is the string to be printed, null terminated
 	; dx has the position
+	push ebp
+	mov ebp, esp
+	mov byte [ebp - 4], 0
+	printline_start:
+	sub esp, 4
 	push edx
 	call calculate_position
 	shl eax, 1
@@ -157,8 +163,31 @@ printstr:
 		test al, al
 		jnz printstr_loop
 	
+	push ecx
+	mov bl, [ebp - 4]
+	test bl, bl
+	jz printstr_bypass
+	mov eax, edi
+	sub eax, 0xb8000
+	mov bl, 80
+	div bl
+	movzx ax, ah
+	mov cx, 80
+	movzx ecx, cx
+	sub cx, ax
+	mov ax, 0x0f20 ; white formatted space
+	printline_loop:
+		stosw
+	loop printline_loop	
+
+	printstr_bypass:
+	pop ecx
 	pop esi
 	pop edi
+	pop edx
+
+	mov esp, ebp
+	pop ebp
 	ret
 
 printchar:
@@ -177,8 +206,11 @@ printcharf:
 	pop ebx
 	ret
 
-
+; calculate_position_with_shift:
+	
 calculate_position:
+	; does not apply the multiply shl 2 because some commands need it and others don't.  
+	;	Moving the cursor requires it to be the actual offset, displaying characters requires shl pos, 1
 	; dx has the position (dh = row, dl = col)
 	; returns in [e]ax
 	xor eax, eax
@@ -192,83 +224,291 @@ calculate_position:
 	ret
 
 
-translate_scancode:
-	; send the scancode in al (for now just single bytes)
-	; eax = [- - - - - - - -] [- - - - - - - -] [- - - - - - - PR] [al ascii]
-	; PR = Press (1) or Release (0)
-	xor ah, ah
-	cmp al, 0x59 ; top press scancode is 0x58
-	jl translate_scancode_press
-		sub al, 0x80 	; release codes differ by 0x80 from press codes
-		jmp translate_scancode_cont
-	translate_scancode_press:
-		or ah, 1
-	; check if it's bigger than 0x58 and return error code.  
-	translate_scancode_cont:
-	cmp al, 0x58
-	ja translate_scancode_error
+getchar_pressed:
+	call getchar
+	test ah, 0x01
+	jz getchar_pressed	; if zero then the character is a release
+	test ah, 0x02		; if non-zero then it is a special character, not an ascii symbol
+	jnz getchar_pressed
+	
+	ret
+	
+getchar_and_display_codes:
+getchar:
+	xor eax, eax		; for the return of the ascii and extended codes [ah = codes][al = ascii or special code]
+	xor ebx, ebx		; for the return of the 
+
+	wait_for_char:	
+		in al, 0x64
+		test al, 1
+		jz wait_for_char
+	
+	;; get a single code because most codes are singletons
+	in al, 0x60
+	;; test to see if the code is 0xE1 or 0xE0
+	
+	cmp al, 0xe0
+	je getchar_extended_scancode
+	cmp al, 0xe1
+	je getchar_super_extended_scancode
+	
+	call check_control_keys 
+	test ah, 2
+	jnz getchar_exit
+	
+	;; if we get here, then it is a singleton code, not extended
+	mov ebx, eax
 	push ebx
-	movzx ebx, al
-	mov al, [single_scan_code_map + ebx]
+	call set_pressed_or_released
+
+	push edx
+	mov edx, 0x1808
+	call display_hex_byte
+	pop edx
+
+	movzx ebx, al 			; save the scancode in bl
+	mov al, [single_scan_code_map + ebx]	; get the ascii code or special code
+	call shift_translate					; tests for the shift code and does all shift translations.
+
+	push edx
+	mov edx, 0x1800
+	call display_hex_byte
+	pop edx
+	
 	pop ebx
+	jmp getchar_exit						; and that's all she wrote
+	
+	getchar_extended_scancode:
+		; take the next scancode in
+		in al, 0x60
+		
+		;; check for the two weird ones, printscreen up and down will be either 0x2a or 0xb7 which don't match with any other scancodes...
+		cmp al, 0x2a
+		je check_printscreen_press
+		cmp al, 0xb7
+		je check_printscreen_release
+		
+		call set_pressed_or_released
+		
+		mov ebx, eax  ;; save the scancode for future use
+		push esi
+		mov esi, extended_keycodes
+		push ecx
+		single_extended_scancode_loop:
+			lodsb			; load a scancode into al
+			test al, al		; if it's null exit
+			jz exit_scancode_single_extended
+			push eax
+			lodsd 			; loads the string into eax		
+			mov edi, eax
+			pop eax
+			cmp al, bl		; compare it with the current scancode
+			jne single_extended_scancode_loop
+
+		or ah, 2
+		call check_extended_control_keys
+		pop ecx
+		pop esi
+		jmp getchar_exit
+		
+		exit_scancode_single_extended:
+			; invalid code
+			pop ecx
+			pop esi
+			xor eax, eax
+			not eax
+			ret
+			
+		check_printscreen_press:
+			nop
+		check_printscreen_release:
+			nop
+	getchar_super_extended_scancode:
+	
+		;; start processing by checking for special characters, shift, alt, ctrl, capslock, numlock, scrollock, printscreen, etc.  
+		;; check for 0xE0 or 0xE1 first.  if we find those codes input more than one code at a time. 
+		;; 
+
+	getchar_exit:
 	ret
 
-	translate_scancode_error:
-		; set error code before return maybe...
-		mov al, 0x00
+set_pressed_or_released:
+	or ah, 1				; set pressed by default
+	cmp al, 0x80
+	jb pressed_key
+		sub al, 0x80		; subtract 0x80 to get the pressed equivalent code and test for that. 
+		and ah, ~0x01		; unset the pressed code
+	pressed_key:
 		ret
 
 
+shift_translate:
+	;	evaluates keyboard_flags for shift and then applies the proper transformation of ascii to the element in al. 
+	; 	modifies eax
+	push esi
+	push ebx
+	test word [keyboard_flags], 0x0003
+	jz shift_translate_end
+
+	cmp al, 'a'
+	jb shift_translate_check_special
+	cmp al, 'z'
+	ja shift_translate_check_special
+	sub al, 0x20
+	jmp shift_translate_end
+	
+	shift_translate_check_special:
+	mov ebx, eax
+	mov esi, shift_symbol_translations
+	
+	shift_translate_loop:
+		lodsw
+		test ax, ax
+		jz shift_translate_end
+		cmp al, bl
+		je shift_translate_found
+	jmp shift_translate_loop
+	
+	shift_translate_found:
+		mov bl, ah
+		mov eax, ebx
+	shift_translate_end:
+	pop ebx
+	pop esi
+	ret
+
+
+check_extended_control_keys:
+	
+	cmp al, 0x1c 						; keypad enter pressed
+	jne ceckeys_kdiv
+	mov al, 0x0a						; set newline
+	and ah, 0xfd						; unset special character
+	ret
+	
+	ceckeys_kdiv:
+	cmp al, 0x35 						; keypad enter pressed
+	jne ceckeys_check2
+	mov al, 0x2f						; set newline
+	and ah, 0xfd						; unset special character
+	ret
+	
+	ceckeys_check2:
+	cmp al, 0x1d						; right control pressed
+	jne ceckeys_check3
+	or word [keyboard_flags], 0x0008 ;  turn on bit 3
+	ret
+	
+	ceckeys_check3:
+	cmp al, 0x38						; right control pressed
+	jne cec_return
+	or word [keyboard_flags], 0x0020 ;  turn on bit 5
+	ret
+	
+	cec_return:
+	ret
+	
+
+check_control_keys:
+	or ah, 0x02
+	
+	cmp al, 0x2a 	; left shift pressed
+	jne getchar_bypass_check_p1
+	or word [keyboard_flags], 0x0001 ;  turn on bit 0
+	ret
+	
+	getchar_bypass_check_p1:
+	cmp al, 0x36 	; right shift pressed
+	jne getchar_bypass_check_p2
+	or word [keyboard_flags], 0x0002 ;  turn on bit 1
+	ret
+
+	getchar_bypass_check_p2:
+	cmp al, 0x1d 	; left control pressed
+	jne getchar_bypass_check_p3
+	or word [keyboard_flags], 0x0004 ;  turn on bit 2
+	ret
+
+	getchar_bypass_check_p3:
+	cmp al, 0x38 	; left alt pressed	
+	jne getchar_bypass_check_r0
+	or word [keyboard_flags], 0x0010 ;  turn on bit 4
+	ret
+
+	getchar_bypass_check_r0:
+	cmp al, 0xaa 	; left shift released
+	jne getchar_bypass_checkr1
+	and word [keyboard_flags], 0xFFFE ;  turn off bit 0	
+	ret
+
+	getchar_bypass_checkr1:
+	cmp al, 0xb6 	; right shift released
+	jne getchar_bypass_checkr2
+	and word [keyboard_flags], 0xFFFD ;  turn off bit 1	
+	ret
+
+	getchar_bypass_checkr2:
+	cmp al, 0x9d 	; left control released
+	jne getchar_bypass_checkr3
+	and word [keyboard_flags], 0xFFFB ;  turn off bit 2
+	ret
+
+	getchar_bypass_checkr3:
+	cmp al, 0xb8 	; left alt released	
+	jne getchar_bypass_checks
+	and word [keyboard_flags], 0xFFEF ;  turn off bit 4
+	ret
+	
+
+	getchar_bypass_checks:
+	and ah, 0xFD ;  not special
+	mov bl, al ; save the original scancode
+	
+	ret
+	
+
+display_hex_byte:
+	; dx will have the position
+	; al will have the byte
+	; convert higher nibble and display
+	push eax
+	shr al, 4
+	call get_nibble_hex
+	call printchar
+
+	pop eax
+	push eax
+
+	call get_nibble_hex
+	inc edx
+	call printchar
+	pop eax
+	ret
+	
+get_nibble_hex:
+	; al contains nibble
+	; al will contain the hex code
+	and al, 0x0f
+	cmp al, 0x09
+	ja nibble_add_letter_code
+	add al, '0'
+	ret
+	nibble_add_letter_code:
+	add al, 'a' - 10
+	ret
+	
 section .data
-	protected_mode_string db "We have entered protected mode.", 0
-						 ; null   esc     1     2
-	; current bugs: ` (tick) the Y key and the \ key don't work.  
-	single_scan_code_map db 0x00, 0x1b,	0x31, 0x32,		; 0x00 - 0x03
-						; 3 	4	 5	   6
-						db 0x33, 0x34, 0x35, 0x36,		; 0x04 - 0x07
-						; 7		8	 9	   0
-						db 0x37, 0x38, 0x39, 0x30,		; 0x08 - 0x0b
-						; -	 	=	back   tab
-						db 0x2d, 0x3d, 0x08, 0x09,		; 0x0c - 0x0f
-						; Q		W 	E		R		[returns capitals]
-						db 0x51, 0x57, 0x45, 0x52, 		; 0x10 - 0x13
-						; T 	Y	U		I
-						db 0x54, 0x59, 0x55, 0x49, 		; 0x14 - 0x17
-						; O 	P   [		]
-						db 0x4f, 0x50, 0x5b, 0x5d,		; 0x18 - 0x1b
-						; ent, LCTRL, A, S 
-						db 0x10, 0x80, 0x41, 0x53,		; 0x1c - 0x1f -- 0x80 is a flipped top bit, meaning that we have some extended code
-						; D, F, G, H
-						db 0x44, 0x46, 0x47, 0x48,		; 0x20
-						; J K L (actual semicolon ;)
-						db 0x4a, 0x4b, 0x4c, 0x3b,		; 0x24
-						; 'quot	` (tick) left-shift	 \
-						db 0x27, 0x60, 0x80, 0x5c,		; 0x28 not sure why this needs to be duplicated, i think this one can be zero.  
-						db 0x27, 0x60, 0x80, 0x5c,		; 0x2c
-						; Z		X	C	V
-						db 0x5a, 0x58, 0x43, 0x56,
-						; B N M ,
-						db 0x42, 0x4e, 0x4d, 0x2c,
-						; . / [R shift] [keypad]*
-						db 0x2e, 0x2f, 0x80, 0x2a,
-						; left-alt space capslock f1
-						db 0x80, 0x20, 0x80, 0x80,
-						; f2, f3, f4, f5
-						db 0x80, 0x80, 0x80, 0x80, 
-						; f6, f7, f8, f9
-						db 0x80, 0x80, 0x80, 0x80, 
-						; f10, numlock, scroll-lock, keypad 7
-						db 0x80, 0x80, 0x80, 0x37, 
-						; keypad-8, keypad-9, keypad-minus, keypad-4
-						db 0x38, 0x39, 0x2d, 0x34,
-						; keypad 5, keypad 6, keypad +, keypad 1
-						db 0x35, 0x36, 0x2b, 0x31,
-						; keypad 2, keypad 3, keypad 0, keypad .
-						db 0x32, 0x33, 0x30, 0x2e,
-						; null, null, null, F11
-						db 0x00, 0x00, 0x00, 0x80,
-						; F12, null, null, null
-						db 0x80, 0x00, 0x00, 0x00, 
+	%include "ps2map.asm"
+	empty_string db 0
+	protected_mode_string 	db 	"We have entered protected mode.", 0
+	extended_code_str		db 	"We have just received an extended code", 0
+	shift_down_string		db  "SHIFT", 0
+	ctrl_down_string		db  "CTRL ", 0
+	alt_down_string			db  " ALT ", 0
+	up_string				db 	"-----", 0
+	; keyboard flags
+	keyboard_flags 		dw 0x0000 ; [ - - - - - CAPL SCRL ] [-, -, RALT, LALT, RCTRL, LCTRL, RSHIFT, LSHIFT] ; where to put insert?
 	cursor_position		dw 0x0100
+	scancode_queue 	dw 0
 section .bss
-	instring resb 1024
+	instring 		resb 1024

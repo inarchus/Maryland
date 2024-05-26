@@ -1,14 +1,23 @@
 ; still to do with keyboard driver: fix the function keys, scroll lock, pause, caps lock probably too
+; shift + space doesn't seem to work, keypad enter isn't working perfectly either.  F[i] keys not implemented
+; get gdb + qemu working for faster debugging
+; figure out how to control where on the floppy everything goes.  
+;	perhaps write a driver using the control registers
+;	then another using dma ...
+; see if it's possible to display an up-timer / time of day
 
 [bits 32]
 
 extern kernel_loader_entry
+extern cgetline
+extern cprintline
+
 extern single_scan_code_map
 extern getchar_pressed
-;extern calculate_position
-	; position desired in dx, returned in ax as offset
-;extern move_cursor_to_position
-	; cursor position in dx
+extern string_length
+extern main_shell
+extern printstr
+extern strings_equal
 
 section .text
 kernel_loader_entry:
@@ -21,26 +30,29 @@ kernel_loader_entry:
 		test al, al
 		jnz kernel_print_loop
 	
-	mov dx, word 0x0100
-	continue_getlining:
-		mov edi, instring
-		push edx
-		inc dh
-		push edx
-		mov esi, empty_string
-		call printline
-		pop edx
-		call getline
-		mov dx, 0x0000
-		mov esi, instring
-		call printline
-		pop edx
-		inc dh
-		cmp dh, 0x17
-		jb skip_reset
-			xor dh, dh
-		skip_reset:
-	jmp continue_getlining
+	push instring
+	call main_shell
+	
+;	mov dx, word 0x0100
+;	continue_getlining:
+;		mov edi, instring
+;		push edx
+;		inc dh
+;		push edx
+;		mov esi, empty_string
+;		call printline
+;		pop edx
+;		call getline
+;		mov dx, 0x0000
+;		mov esi, instring
+;		call printline
+;		pop edx
+;		inc dh
+;		cmp dh, 0x17
+;		jb skip_reset
+;			xor dh, dh
+;		skip_reset:
+;	jmp continue_getlining
 	
 
 move_cursor_to_position: 
@@ -75,12 +87,25 @@ move_cursor_to_position:
 	ret
 
 
-
-		
-
-
 BACKSPACE equ 0x08
 
+cgetline:
+	push ebp
+	mov ebp, esp
+	push edi
+	push edx
+
+	mov edi, [ebp + 8]
+	mov edx, [ebp + 12]
+	call getline
+
+	pop edx
+	pop edi
+
+	leave
+	ret
+	
+	
 getline:
 	; edi will have the pointer to the string
 	; dx will have the position to move the cursor
@@ -96,9 +121,10 @@ getline:
 		je getline_return
 
 		stosb
-		mov edx, [esp]
+		pop edx 
+		push edx
 		call printchar
-		pop edx		
+		pop edx
 		inc dl
 		cmp dl, 80
 		jb getline_no_linefeed
@@ -134,6 +160,23 @@ getline:
 		dec edi
 		jmp getline_resume
 
+
+strings_equal:
+	
+	
+	ret
+
+cprintline:
+	push ebp
+	mov ebp, esp
+	
+	mov esi, [ebp + 8]
+	mov edx, [ebp + 12]
+	
+	call printline
+	
+	leave
+	ret
 
 printline:
 	push ebp
@@ -230,10 +273,11 @@ getchar_pressed:
 	jz getchar_pressed	; if zero then the character is a release
 	test ah, 0x02		; if non-zero then it is a special character, not an ascii symbol
 	jnz getchar_pressed
+	cmp al, 0x80		; probably should set the 0x02 flag in ah but we'll fix that later as usual
+	jae getchar_pressed 	; this is an F1-F12 key, or some other key which is not translatable into ascii
 	
 	ret
 	
-getchar_and_display_codes:
 getchar:
 	xor eax, eax		; for the return of the ascii and extended codes [ah = codes][al = ascii or special code]
 	xor ebx, ebx		; for the return of the 
@@ -315,23 +359,78 @@ getchar:
 			; invalid code
 			pop ecx
 			pop esi
+		exit_printscreen_check_failed:
 			xor eax, eax
 			not eax
 			ret
 			
 		check_printscreen_press:
-			nop
+			; here we've scanned 0xe0 and then 0x2a
+			;printscreen_down_keycode		db 0xE0, 0x2A, 0xE0, 0x37
+			in al, 0x60
+			cmp al, 0xe0
+			jne exit_printscreen_check_failed
+			in al, 0x60
+			cmp al, 0x37
+			jne exit_printscreen_check_failed
+			or ah, 3	; pressed and special
+			mov ebx, 'PRSC'
+			ret
 		check_printscreen_release:
-			nop
+			; here we've scanned 0xe0 and then 0xb7
+			;printscreen_up_keycode			db 0xE0, 0xB7, 0xE0, 0xAA
+			in al, 0x60
+			cmp al, 0xe0
+			jne exit_printscreen_check_failed
+			in al, 0x60
+			cmp al, 0xaa
+			jne exit_printscreen_check_failed
+			or ah, 2	; special
+			mov ebx, 'PRSC'
+			ret
 	getchar_super_extended_scancode:
-	
-		;; start processing by checking for special characters, shift, alt, ctrl, capslock, numlock, scrollock, printscreen, etc.  
-		;; check for 0xE0 or 0xE1 first.  if we find those codes input more than one code at a time. 
-		;; 
-
+		;; remember that we've already scanned the 0xe1 so we need to check the rest.  
+		;; pause_keycode					db 0xE1, 0x1D, 0x45, 0xE1, 0x9D, 0xC5
+		push esi
+		lea esi, [pause_keycode + 1]
+		push ecx
+		push ebx
+		
+		mov ecx, 5
+		
+		check_pause_loop:
+			in al, 0x64
+			test al, 1
+			jz pause_check_failed
+			lodsb
+			mov bl, al
+			in al, 0x60
+			cmp al, bl
+			jne pause_check_failed
+			
+		loop check_pause_loop
+		
+		mov ebx, 'PAUS'
+		mov ax, 0x0380 ; special character pressed
+		jmp pause_passed
+		pause_check_failed:
+			xor eax, eax
+			not eax
+		pause_passed:
+			pop ebx
+			pop ecx
+			pop esi
+			ret
+		
 	getchar_exit:
 	ret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; set_pressed_or_released(al, ah) -> ah			modifies(ah)									  ;;;; 	
+;;;; 	sets the pressed flag in ah, bit 0.															  ;;;; 	
+;;;;	returns the value in ah										 								  ;;;; 	
+;;;;																 								  ;;;; 	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 set_pressed_or_released:
 	or ah, 1				; set pressed by default
 	cmp al, 0x80

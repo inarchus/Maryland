@@ -1,15 +1,19 @@
-;	Next step, replace int 0x16 with PS/2 driver
-;	Then replace floppy int 0x13 with floppy controller in/out commands.  
-;	Then we should be ready to go to 32 bit mode once we fully understand those things and can load and write to a floppy, print and get input from the keyboard
-;	build a GDT and then finish executing the protected mode jump.  
+;	Next step, replace int 0x16 with PS/2 driver <-- done in the 32 bit version.  Unnecessary here as long as bios works.  
+;	Then we should be ready to go to 32 bit mode once we fully understand those things and can load and write to a floppy, print and get input from the keyboard <-- already have
+;	build a GDT and then finish executing the protected mode jump.  <-- done
+;	Then replace floppy int 0x13 with floppy controller in/out commands.  <-- next priority, still need to do this
+;	
 
 [bits 16]
 [segment 0x8000]
 
 extern kernel_loader_entry
 extern single_scan_code_map
+;extern getchar_pressed
+extern translate_scancode
 ;extern calculate_position
 ;extern move_cursor_to_position
+extern string_length
 
 section .text
 
@@ -20,7 +24,7 @@ init:
 	mov fs, ax
 	mov gs, ax
 	mov ss, ax
-	mov sp, 0x7ffe ; set up the stack so that it can descend.  
+	mov sp, 0x6fff ; set up the stack so that it can descend.  
 	
 	mov di, new_string
 	xor dx, dx
@@ -826,8 +830,8 @@ string_length:
 	push di
 	push cx
 	mov di, si
-	xor ax, ax ; ensure that al is set to zero
-	mov cx, 0xffff
+	xor ax, ax 		; ensure that al is set to zero
+	mov cx, 0xffff	; limit of 65535 length
 	repnz scasb
 	not cx
 	dec cx
@@ -941,6 +945,7 @@ getline:
 
 		skip_out:
 		
+		push ax
 		mov dl, al
 		lea si, [out_num + 1]
 		call convert_nibble_to_ascii
@@ -952,6 +957,20 @@ getline:
 
 		mov di, out_num
 		mov dx, 0x1800
+		call write_string_to_screen
+		
+		pop ax
+		mov dl, ah
+		lea si, [out_num + 1]
+		call convert_nibble_to_ascii
+		
+		mov dl, ah
+		shr dl, 4
+		lea si, [out_num]
+		call convert_nibble_to_ascii
+
+		mov di, out_num
+		mov dx, 0x1808
 		call write_string_to_screen
 		
 		pop bx
@@ -1178,7 +1197,7 @@ section .data
 	measure_high_ram_string db "measure high memory", 0
 	cpuid_string db "cpuid", 0
 
-	gdtable:
+	gdtable:		; https://github.com/coreos/grub/blob/c6b9a0af3d7483d5b5c5f79caf7ced64298bd4ac/grub-core/kern/i386/realmode.S#L219 for reference
 			dq 0 				; null descriptor
 		gdt_code_seg:			; code descriptor
 			dw 0xFFFF			; limit lowest 16 bits

@@ -1,10 +1,5 @@
 /*
-extern void hexdump(unsigned int memory_location);
 
-void hexdump(unsigned int memory_location)
-{
-	
-}
 */
 
 extern int strings_equal(char * string1, char * string2);

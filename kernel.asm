@@ -3,7 +3,9 @@
 ; get gdb + qemu working for faster debugging
 ; figure out how to control where on the floppy everything goes.  
 ;	perhaps write a driver using the control registers
-;	then another using dma ...
+;	then another using dma ... or maybe just one that works you crazy-man.  
+; 	still doing this stuff... amazing
+; 	got the pic online, now it's time to get the IRQ interrupts online...
 ; see if it's possible to display an up-timer / time of day
 
 [bits 32]
@@ -11,13 +13,32 @@
 extern kernel_loader_entry
 extern cgetline
 extern cprintline
+extern cstrings_equal
+extern hex_dump
+extern print_string
 
 extern single_scan_code_map
 extern getchar_pressed
 extern string_length
 extern main_shell
+extern printlinef
 extern printstr
+extern printstrf
 extern strings_equal
+extern configure_pit
+extern print_hex_word
+extern chex_to_number
+extern startswith
+
+extern nibble_to_hexchar
+extern print_hex_dword ; C -> ASM
+extern display_stack_values
+extern print_hex_byte
+extern print_hex_word
+extern print_hex_dword
+extern hex_str_to_value
+
+extern configure_pic
 
 section .text
 kernel_loader_entry:
@@ -29,31 +50,13 @@ kernel_loader_entry:
 		stosw
 		test al, al
 		jnz kernel_print_loop
+		
+	; configure the PIC to use the PIT, Floppy Drive and Mouse
+	call configure_pic
+	call configure_pit
 	
 	push instring
 	call main_shell
-	
-;	mov dx, word 0x0100
-;	continue_getlining:
-;		mov edi, instring
-;		push edx
-;		inc dh
-;		push edx
-;		mov esi, empty_string
-;		call printline
-;		pop edx
-;		call getline
-;		mov dx, 0x0000
-;		mov esi, instring
-;		call printline
-;		pop edx
-;		inc dh
-;		cmp dh, 0x17
-;		jb skip_reset
-;			xor dh, dh
-;		skip_reset:
-;	jmp continue_getlining
-	
 
 move_cursor_to_position: 
 	; https://wiki.osdev.org/Text_Mode_Cursor
@@ -99,6 +102,8 @@ cgetline:
 	mov edx, [ebp + 12]
 	call getline
 
+	mov eax, edi
+	
 	pop edx
 	pop edi
 
@@ -119,7 +124,6 @@ getline:
 		je getline_backspace
 		cmp al, 0x0a
 		je getline_return
-
 		stosb
 		pop edx 
 		push edx
@@ -161,10 +165,170 @@ getline:
 		jmp getline_resume
 
 
+cstrings_equal:
+	push ebp
+	mov ebp, esp
+	push esi
+	push edi
+	push ebx
+
+	mov esi, [ebp + 12]
+	mov edi, [ebp + 8]
+
+	jmp strings_equal_cstart
 strings_equal:
+	push ebp
+	mov ebp, esp
+	push esi
+	push edi
+	push ebx
+	strings_equal_cstart:
 	
+	xor ecx, ecx
 	
+	strings_equal_compare_loop:
+		lodsb
+		mov bl, [edi]
+		inc edi
+		cmp al, bl
+		jne strings_equal_failed
+		test bl, bl
+		jz strings_equal_end_compare
+		test al, al
+		jz strings_equal_end_compare
+		inc ecx
+	jmp strings_equal_compare_loop
+	
+	strings_equal_end_compare:
+		cmp al, bl
+		jne strings_equal_failed
+		mov eax, 1
+		jmp strings_equal_success
+	strings_equal_failed:
+		xor eax, eax
+	strings_equal_success:
+	pop ebx
+	pop edi
+	pop esi	
+	leave
 	ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; chex_to_number(stack1) -> eax				modifies(eax)										  ;;;; 	
+;;;; 	hex string in the first stack argument														  ;;;; 	
+;;;;	returns the value in eax									 								  ;;;; 	
+;;;;		Sets the carry flag if there is an error				 								  ;;;; 	
+;;;;		Maximum of 8 hex characters								 								  ;;;; 	
+;;;;																 								  ;;;; 	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+chex_to_number:
+	push ebp
+	mov ebp, esp
+
+	push esi
+	mov esi, [ebp + 12]
+	
+	mov dx, 0x0030
+	call printstr
+	
+	call hex_string_to_number
+	pop esi
+	
+	leave
+	ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; hex_string_to_number(rsi) -> eax			modifies(eax)										  ;;;; 	
+;;;; 	hex string in rsi																			  ;;;; 	
+;;;;	returns the value in eax									 								  ;;;; 	
+;;;;		Sets the carry flag if there is an error				 								  ;;;; 	
+;;;;		Maximum of 8 hex characters								 								  ;;;; 	
+;;;;																 								  ;;;; 	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+hex_string_to_number:
+	push ecx
+	push ebx							; use ebx as the temporary data storage
+	push esi
+
+	xor ebx, ebx
+	mov ecx, 8
+	hex_string_to_number_loop:
+		lodsb							; loads a byte from rsi into al
+		test al, al						; check for null termination
+		jz hex_string_to_number_end		; end if found \0
+		cmp al, '0'
+		jb hex_string_to_number_error	
+		sub al, '0'
+		cmp al, 0x0a					; if it's below 0xa, then it's a number
+		jb bypass_letter_checks
+		cmp al, 0x16
+		jbe hex_string_to_number_lower_case
+		cmp al, 0x31
+		jb hex_string_to_number_error
+		cmp al, 0x36
+		ja hex_string_to_number_error
+		sub al, 0x20					; the difference is actually 0x27 but we'll subtract 7 in the next step
+		hex_string_to_number_lower_case:
+		sub al, 0x07					; the difference between 0x11 and 0x16 versus 0x0a to 0x0f is 7
+		bypass_letter_checks:			; it was a number rather than a letter
+		shr ebx, 4						; each hex digit is 4 bytes
+		add bl, al
+		dec ecx
+		test ecx, ecx
+	jnz hex_string_to_number_loop
+	
+	hex_string_to_number_error:
+		stc
+
+	hex_string_to_number_end:
+		pop esi
+		mov eax, ebx
+		pop ebx
+		pop ecx
+
+	ret
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; startswith(stack 1, stack 2) -> eax				1 if st1 starts with st2, 0 otherwise		  ;;;; 	
+;;;; 	hex string in rsi																			  ;;;; 	
+;;;;	returns the value in eax									 								  ;;;; 	
+;;;;		Sets the carry flag if there is an error				 								  ;;;; 	
+;;;;		Maximum of 8 hex characters								 								  ;;;; 	
+;;;;																 								  ;;;; 	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+startswith:
+	push ebp 
+	mov ebp, esp
+	push esi
+	push edi
+	push ebx
+	mov edi, [ebp + 12] ; 
+	mov esi, [ebp + 8]  ; 
+	
+	startswith_loop:
+		lodsb					; get the next character of the big string
+		mov bl, [edi]			; get the substring character
+		test bl, bl				; if it's null success
+		jz startswith_success
+		inc edi
+		cmp al, bl				; 
+		jne startswith_failure	; if the two strings differ in that character
+		test al, al
+	jnz startswith_loop
+	
+	startswith_failure:
+		xor eax, eax
+		jmp startswith_bypass_success
+	startswith_success:	
+		mov eax, 1
+	startswith_bypass_success:
+	pop ebx
+	pop edi
+	pop	esi
+	leave
+	ret
+
 
 cprintline:
 	push ebp
@@ -177,20 +341,48 @@ cprintline:
 	
 	leave
 	ret
-
-printline:
+	
+print_string:
 	push ebp
 	mov ebp, esp
+	
+	mov esi, [ebp + 8]
+	mov edx, [ebp + 12]
+	
+	call printstr
+	
+	leave
+	ret
+
+printline:
+	mov al, 0x0f
+	call printlinef
+	ret
+
+printstr:
+	mov al, 0x0f
+	call printstrf
+	ret
+	
+printlinef:
+	; al has the format
+	push ebp
+	mov ebp, esp
+	mov byte [ebp - 2], al
 	mov byte [ebp - 4], 1
 	jmp printline_start
-printstr:
+
+printstrf:
+	; al has the format
 	; esi is the string to be printed, null terminated
 	; dx has the position
 	push ebp
 	mov ebp, esp
+	mov byte [ebp - 2], al
 	mov byte [ebp - 4], 0
 	printline_start:
 	sub esp, 4
+	push ebx
 	push edx
 	call calculate_position
 	shl eax, 1
@@ -198,8 +390,8 @@ printstr:
 	push esi
 	
 	mov edi, 0xb8000	; graphics buffer
-	add di, ax			; the position should never exceed ax
-	mov ah, 0x0f		; format
+	add edi, eax		; the position should never exceed ax
+	mov ah, [ebp - 2]	; format
 	printstr_loop:
 		lodsb
 		stosw
@@ -228,42 +420,47 @@ printstr:
 	pop esi
 	pop edi
 	pop edx
-
+	pop ebx
 	mov esp, ebp
 	pop ebp
 	ret
 
-printchar:
+printchar:		; modifies ah, no return
 	; dx has the position
 	; al has the character
 	mov ah, 0x0f
+	push ebx
+	push eax
+	jmp print_char_no_format
 printcharf:
 	; ah has the format
 	push ebx
 	push eax
-	call calculate_position
-	shl eax, 1
-	movzx ebx, ax
-	pop eax
-	mov [0xb8000 + ebx], ax
-	pop ebx
+	print_char_no_format:
+		call calculate_position
+		shl eax, 1
+		movzx ebx, ax
+		pop eax
+		mov [0xb8000 + ebx], ax
+		pop ebx
 	ret
 
-; calculate_position_with_shift:
-	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; calculate_position(dx) -> eax			preserves(ebx, edx)							  			  ;;;; 
+;;;; 	dh = row, dl = column																		  ;;;; 	
+;;;;	returns the value in eax = 80 * dh + dl						 								  ;;;; 
+;;;;	Used to calculate the memory offset for displaying text to the screen in the b8000 range	  ;;;; 	
+;;;; 	does not apply the multiply shl 2 because some commands need it and others don't.  			  ;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 calculate_position:
-	; does not apply the multiply shl 2 because some commands need it and others don't.  
-	;	Moving the cursor requires it to be the actual offset, displaying characters requires shl pos, 1
-	; dx has the position (dh = row, dl = col)
-	; returns in [e]ax
-	xor eax, eax
+	xor eax, eax		
 	push ebx
 	movzx eax, dh
-	mov bl, 80
-	mul bl
-	movzx ebx, dl
-	add eax, ebx
-	pop ebx
+	mov bl, 80			; the number of columns per row
+	mul bl				; multiply dh * col_per_row to get the offset
+	movzx ebx, dl		; do this to preserve edx as is
+	add eax, ebx		; dh * col_per_row + dl to get the total offset
+	pop ebx				; preserve ebx
 	ret
 
 
@@ -564,41 +761,242 @@ check_control_keys:
 	mov bl, al ; save the original scancode
 	
 	ret
+
+
+display_stack_values:
+	push dword 0x0200
+	push dword [esp + 4] ; actually 0
+	call print_hex_dword
+	add esp, 8
 	
+	push dword 0x0300
+	push dword [esp + 8] ; actually 4
+	call print_hex_dword
+	add esp, 8
+
+	push dword 0x0400
+	push dword [esp + 12] ; actually 8
+	call print_hex_dword
+	add esp, 8
+
+	push dword 0x0500
+	push dword [esp + 16] ; actually 12
+	call print_hex_dword
+	add esp, 8
+	
+	ret
+
+;void __fastcall print_hex_word(unsigned short word, unsigned int position)
+;{
+;	print_hex_byte((unsigned char)(word >> 8) & 0xff, position);
+;	print_hex_byte((unsigned char)word & 0xff, position + 2);
+;}
+print_hex_dword:
+	push edx
+	push ecx
+	shr ecx, 16
+	call print_hex_word
+	pop ecx
+	add edx, 4
+	call print_hex_word
+	pop edx
+	ret	
+
+;void __fastcall print_hex_dword(unsigned int dword, unsigned int position)
+;{
+;	print_hex_word((unsigned short) ((dword >> 16) & 0xffff), position);
+;	print_hex_word((unsigned short) (dword & 0xffff), position + 4);
+;}
+print_hex_word:
+	push edx
+	push ecx
+	shr ecx, 8
+	call print_hex_byte
+	add edx, 2
+	pop ecx
+	call print_hex_byte
+	pop edx	
+	ret
+
+
+print_hex_byte:
+	movzx eax, cl
+	call display_hex_byte
+	ret
 
 display_hex_byte:
-	; dx will have the position
 	; al will have the byte
+	; dx will have the position
 	; convert higher nibble and display
+	push edx
 	push eax
 	shr al, 4
+	xor ah, ah				; lowercase hex
 	call get_nibble_hex
 	call printchar
-
 	pop eax
 	push eax
-
+	xor ah, ah
 	call get_nibble_hex
 	inc edx
 	call printchar
 	pop eax
+	pop edx
 	ret
-	
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; nibble_to_hexchar(al, ah) -> al			modifies(al)		[c-call]						  ;;;; 	
+;;;; 	converts a nibble in al to an ascii hex character											  ;;;; 	
+;;;;	the second parameter put into ah determines the case of the hex if a letter					  ;;;; 	
+;;;;		experiment to determine if using esp is possible										  ;;;; 	
+;;;;  		it seems to be legal with the offset adjusted										  	  ;;;; 	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+nibble_to_hexchar:
+	mov ah, [esp + 8]
+	mov al, [esp + 4]
+	call get_nibble_hex
+	ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; get_nibble_hex(al, ah) -> al			modifies(al)		[asm-call]							  ;;;; 	
+;;;; 	converts a nibble in al to an ascii hex character											  ;;;; 	
+;;;;	the second parameter put into ah determines the case of the hex if a letter					  ;;;; 	
+;;;;																 								  ;;;; 	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 get_nibble_hex:
 	; al contains nibble
 	; al will contain the hex code
 	and al, 0x0f
 	cmp al, 0x09
-	ja nibble_add_letter_code
+	ja nibble_add_letter_code_lower
 	add al, '0'
 	ret
-	nibble_add_letter_code:
+	nibble_add_letter_code_lower:
+	test ah, ah
+	jnz nibble_add_letter_code_upper
 	add al, 'a' - 10
 	ret
+	nibble_add_letter_code_upper:
+	add al, 'A' - 10
+	ret
+
+
+hex_ascii_to_value:
+	cmp al, ':'
+	je hex_ascii_to_value_ignore_letter
+	cmp al, '_'
+	je hex_ascii_to_value_ignore_letter
+
+	mov ah, 1	
+
+	cmp al, '0'
+	jb hex_ascii_to_value_error
+	cmp al, '9'
+	ja hex_ascii_to_value_check_letter
+	sub al, '0'
+	ret
+	hex_ascii_to_value_check_letter:
+	cmp al, 'A'
+	jb hex_ascii_to_value_error
+	cmp al, 'F'
+	ja hex_ascii_to_value_check_lower_case
+	sub al, 'A' - 10
+	ret
+	hex_ascii_to_value_check_lower_case:
+	cmp al, 'a'
+	jb hex_ascii_to_value_error
+	cmp al, 'f'
+	ja hex_ascii_to_value_error
+	sub al, 'a' - 10
+	ret
 	
+	hex_ascii_to_value_ignore_letter:
+		inc cx
+	hex_ascii_to_value_error:
+		xor ah, ah
+	ret
+
+;__fastcall unsigned int hex_str_to_value(char * p_string);
+hex_str_to_value:
+	push esi
+	push ecx
+	push ebx
+	xor ebx, ebx			; keep the result in ebx until the return
+	mov esi, ecx
+	mov cx, 8				; 8 is the max size because after that there shouldn't be any more hex letters
+	mov ah, 1
+	hex_str_to_value_loop:
+		lodsb
+		test al, al
+		jz hex_str_to_value_exit
+
+		test ah, ah
+		jz hstv_bypass_increment
+			shl ebx, 4
+		hstv_bypass_increment:
+		call hex_ascii_to_value
+		add bl, al
+		dec cx
+	jnz hex_str_to_value_loop
+	
+	hex_str_to_value_exit:
+	mov eax, ebx
+	pop ebx
+	pop ecx
+	pop esi
+	ret
+
+
+;void __fastcall hex_dump(unsigned char * starting_address)
+hex_dump:
+	push edx
+	push ecx
+	push ebx
+	
+	mov ebx, ecx
+	
+	mov dx, 0x0100
+	mov esi, hexdump_str
+	call printline
+	
+	mov dx, 0x010a
+	call print_hex_dword
+	
+	mov cx, 21
+	mov dx, 0x0200
+	
+	hex_dump_outer_loop:
+		push ecx
+		
+		mov esi, empty_string
+		call printline
+
+		mov cx, 25
+		hex_dump_inner_loop:
+			mov al, [ebx]
+			call display_hex_byte
+			inc ebx
+			add edx, 3
+			dec cx
+		jnz hex_dump_inner_loop
+		
+		inc dh
+		xor dl, dl
+		
+		pop ecx
+		dec cx
+	jnz hex_dump_outer_loop	
+	
+	pop ebx	
+	pop ecx
+	pop edx
+	ret
+
+
 section .data
 	%include "ps2map.asm"
 	empty_string db 0
+	hexdump_str			    db  "Hexdump: ", 0
 	protected_mode_string 	db 	"We have entered protected mode.", 0
 	extended_code_str		db 	"We have just received an extended code", 0
 	shift_down_string		db  "SHIFT", 0

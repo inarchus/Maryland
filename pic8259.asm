@@ -1,3 +1,5 @@
+; https://wiki.osdev.org/8259_PIC
+
 PIC_MASTER_CMD	equ		0x20
 PIC_SLAVE_CMD	equ		0xa0
 PIC_MASTER_DATA	equ		0x21
@@ -44,8 +46,8 @@ configure_pic:
 	; 		set the masks...
 
 	; set the masks so that PIT, Floppy and Mouse are enabled, currently keep keyboard interrupts disabled.  
-	;; i think that 0's are enabled, 1 is 'masked'	
-	mov cx, 11101111_10111110b
+	;; i think that 0's are enabled, 1 is 'masked'
+	mov cx, 11111111_10111100b
 	call send_pic_word
 	
 	pop eax
@@ -63,9 +65,9 @@ send_pic_word:
 	mov dx, PIC_SLAVE_DATA
 	mov al, ch				; out PIC_SLAVE_DATA, 11101111b	; enable the mouse for IRQs.  
 	out dx, al			
-	
+
+	pop eax	
 	pop edx
-	pop eax
 	ret
 	
 ;In-Service Register (ISR) and the Interrupt Request Register (IRR)

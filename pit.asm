@@ -25,37 +25,35 @@ extern read_pit
 extern configure_pit
 extern pit_interrupt_irq0
 extern print_hex_word
+extern pit_interrupt_table_entry
 
 section .text
 
 configure_pit:
-	push ebp
-	mov ebp, esp
-
-	; mov eax, [ebp - 12] ; the argument for the configuration is contained in al
-	
 	mov dx, 0x43
 	mov al, PIT_16BITS | PIT_OP_MODE_3 | PIT_ACCESS_LOW | PIT_ACCESS_HIGH | PIT_CHANNEL_0
-	;cli 
+	cli 
 	out dx, al
 	
 	; specify the reload value, let's try for the slowest possible tick at first... low and then high byte
 	mov dx, 0x40
-	mov al, 0xff
+	mov al, 0x34		;  this is the timing low word
 	out dx, al
-	mov al, 0xff
+	mov al, 0x12		; this is the timing high word
 	out dx, al
 	
-	;sti
+	mov al, 0
+	out dx, al
+	out dx, al
 	
-	leave
+	sti		; as long as we mask the pit IRQ, this doesn't blow everything up.  
 	ret
 	
 
 read_pit:
-	mov dx, 0x43
-	mov al, 11000010b
 	cli 
+	mov dx, 0x43
+	mov al, 0
 	out dx, al
 	
 	xor eax, eax 	; set to zero because we're going to be filling ax with bits, don't want to let the high word get involved
@@ -65,41 +63,11 @@ read_pit:
 	in al, dx 		; input into al, but now the bytes are flipped
 	xchg al, ah		; flip them back.  
 
-	mov [current_tick], ax
-	
+	mov [current_tick], eax
+	sti	
 	ret
 
 
-pit_interrupt_irq0:
-	cli
-	push eax
-	push edx
-	
-	mov dx, 0x43
-	mov al, 11000010b
-	out dx, al
-	
-	xor eax, eax 	; set to zero because we're going to be filling ax with bits, don't want to let the high word get involved
-	mov dx, 0x40
-	in al, dx		; input the low byte
-	xchg al, ah		; exchange ah and al so that we can input into al again (cannot do directly into ah)
-	in al, dx 		; input into al, but now the bytes are flipped
-	xchg al, ah		; flip them back.  
 
-	inc dword [current_tick]
-	; mov ax, [current_tick]
-	mov dx, 0x1735
-	call print_hex_word
-
-	mov ax, [current_tick + 2]
-	mov dx, 0x1730
-	call print_hex_word
-
-	pop edx	
-	pop eax
-	
-	sti
-	iret
-	
 section .data
 	current_tick dd 0

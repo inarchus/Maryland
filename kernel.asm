@@ -2,13 +2,16 @@
 ; shift + space doesn't seem to work, keypad enter isn't working perfectly either.  F[i] keys not implemented
 ; get gdb + qemu working for faster debugging
 ; figure out how to control where on the floppy everything goes.  
-;	perhaps write a driver using the control registers
-;	then another using dma ... or maybe just one that works you crazy-man.  
-; 	still doing this stuff... amazing
-; 	got the pic online, now it's time to get the IRQ interrupts online...
-; see if it's possible to display an up-timer / time of day
-
+;	perhaps write a driver using the control registers - done (using DMA)
+;	then another using dma ... or maybe just one that works you crazy-man. - done
+;	try to get PIO working for the floppy drive read command as well, bypass the need for DMA
+; 	add support for floppy controller version 0x81 rather than 0x90 described on osdev.net [no idea where to find documentation for that]
+; 	
+;	here's a list of QEMU options that seems to be not documented in the official QEMU site anymore
+;	https://qemu.weilnetz.de/w32/2012/2012-12-04/qemu-doc.html
 [bits 32]
+
+extern pit_interrupt_table_entry
 
 extern kernel_loader_entry
 extern cgetline
@@ -16,6 +19,7 @@ extern cprintline
 extern cstrings_equal
 extern hex_dump
 extern print_string
+extern getchar_pressed
 
 extern single_scan_code_map
 extern getchar_pressed
@@ -31,32 +35,76 @@ extern chex_to_number
 extern startswith
 
 extern nibble_to_hexchar
-extern print_hex_dword ; C -> ASM
+extern print_hex_dword 			; C -> ASM
 extern display_stack_values
 extern print_hex_byte
 extern print_hex_word
 extern print_hex_dword
 extern hex_str_to_value
 
+extern pit_interrupt_irq0
+extern pit_wait
+
+; from pic8259.asm
 extern configure_pic
+extern display_pic_registers
 
 section .text
 kernel_loader_entry:
-	mov edi, 0xb8000
+	call clear_screen
+	
+	xor dx, dx
 	mov esi, protected_mode_string
-	mov ah, 0x0f
-	kernel_print_loop:
-		lodsb
-		stosw
-		test al, al
-		jnz kernel_print_loop
-		
+	call printline
+	
+	lidt [idtable_descriptor]
+	sti
+
+	; we can add some safety checks to determine if sse exists on the machine.  
+	call enable_sse
+	
 	; configure the PIC to use the PIT, Floppy Drive and Mouse
 	call configure_pic
 	call configure_pit
-	
+
 	push instring
 	call main_shell
+
+clear_screen:
+	mov cx, 24
+	xor dx, dx
+	
+	mov esi, empty_string
+	
+	clear_screen_loop:
+		add dx, 80
+		call printline
+		dec cx
+	jnz clear_screen_loop
+	
+	ret
+
+enable_sse:
+	; doesn't seem to work with the i386 emulation even in pentium 3 or 4 mode, must investigate further
+	
+	mov eax, cr0
+	and al, ~0x04 	; clears bit 3, clear coprocessor emulation CR0.EM
+	or al, 0x02		; set bit 2, set coprocessor monitoring  CR0.MP
+	mov cr0, eax	; re-set the cr0 register
+	
+	mov eax, cr4
+	or ax, 0x0600	; or with bits 9 and 10, set CR4.OSFXSR and CR4.OSXMMEXCPT at the same time
+	mov cr4, eax
+	
+	ldmxcsr [mxcsr_reg_value] ; somehow this instruction doesn't explode, but the problem is that it also doesn't seem to work entirely.  
+
+	; these instructions do work however, giving us about 8 additional 32 bit registers or 16 if we're creative.  
+	movd mm0, eax		; seems to work, VMWare seems to have problems with the xmm registers even after this is enabled... 
+	; pinsrd xmm0, eax, 2, would be beautiful to have essentially unlimited scratch space...
+	; pinsrw xmm0, ax, 2 ; this works, but we have to be careful because pinsrd doesn't, so sse2 is not enabled.  
+
+	ret
+	
 
 move_cursor_to_position: 
 	; https://wiki.osdev.org/Text_Mode_Cursor
@@ -993,19 +1041,157 @@ hex_dump:
 	ret
 
 
+pit_wait:
+	; ecx contains the wait count
+	push eax
+	mov eax, ecx
+	add eax, [current_tick]
+	
+	pit_wait_loop:
+		cmp [current_tick], eax
+	jb pit_wait_loop
+	pop eax
+	ret
+	
+
+pit_interrupt_irq0:
+	push eax
+	push edx
+	push esi
+	
+	inc dword [current_tick]
+	mov dx, 0x1840
+	push ecx
+	mov ecx, [current_tick]
+	call print_hex_dword
+	pop ecx
+	
+	; end of interrupt
+	mov al, 0x20
+	out 0x20, al
+
+	pop esi
+	pop edx	
+	pop eax
+	
+	iretd
+
+keyboard_irq1:
+	push eax
+	push edx
+	push esi
+
+	; end of interrupt
+	mov al, 0x20
+	out 0x20, al
+
+	pop esi
+	pop edx	
+	pop eax
+	
+	iretd
+
+floppy_interrupt_irq6:
+	push eax
+	push edx
+	push esi
+	
+	mov dx, 0x0500
+	mov esi, irq6_recieved_str
+	call printline
+	
+	; end of interrupt
+	mov al, 0x20
+	out 0x20, al
+
+	pop esi
+	pop edx	
+	pop eax
+	
+	iretd
+	
+mouse_interrupt_irq12:
+	push eax
+	push edx
+	push esi
+	
+	mov dx, 0x0500
+	mov esi, irq12_recieved_str
+	call printline
+	
+
+	; end of interrupt
+	mov al, 0xa0
+	out 0xa0, al
+
+	; end of interrupt
+	mov al, 0x20
+	out 0x20, al
+
+	pop esi
+	pop edx	
+	pop eax
+	
+	iretd
+	
+
+general_fault_handler:
+	add esp, 4
+	iret
+
+
 section .data
 	%include "ps2map.asm"
-	empty_string db 0
+	empty_string 			db 0
 	hexdump_str			    db  "Hexdump: ", 0
 	protected_mode_string 	db 	"We have entered protected mode.", 0
 	extended_code_str		db 	"We have just received an extended code", 0
+	irq6_recieved_str		db	"IRQ6 Received.", 0
+	irq12_recieved_str		db	"IRQ12 Received.", 0
 	shift_down_string		db  "SHIFT", 0
 	ctrl_down_string		db  "CTRL ", 0
 	alt_down_string			db  " ALT ", 0
 	up_string				db 	"-----", 0
 	; keyboard flags
-	keyboard_flags 		dw 0x0000 ; [ - - - - - CAPL SCRL ] [-, -, RALT, LALT, RCTRL, LCTRL, RSHIFT, LSHIFT] ; where to put insert?
-	cursor_position		dw 0x0100
-	scancode_queue 	dw 0
+	keyboard_flags 			dw 0x0000 ; [ - - - - - CAPL SCRL ] [-, -, RALT, LALT, RCTRL, LCTRL, RSHIFT, LSHIFT] ; where to put insert?
+	cursor_position			dw 0x0100
+	scancode_queue 			dw 0
+	mxcsr_reg_value			dd 0x0000_1F80
+	current_tick 			dw 0x0
+
+	idtable:
+		prior_interrupts:
+			dq 0, 0, 0, 0, 0, 0, 0, 0
+			dq 0, 0, 0, 0, 0, 0, 0, 0
+			dq 0, 0, 0, 0, 0, 0, 0, 0
+			dq 0, 0, 0, 0, 0, 0, 0, 0
+		pit_interrupt_table_entry:
+			dw pit_interrupt_irq0										; low word of the address
+			dw 0x0008													; code segment
+			db 0 														; reserved////
+			db 1_00_0_1110b 											; flags
+			dw 0														; high word of the address of the interrupt handler.  
+		keyboard_interrupt_table_entry:
+			dw keyboard_irq1											; low word of the address
+			dw 0x0008													; code segment
+			db 0 														; reserved////
+			db 1_00_0_1110b 											; flags
+			dw 0														; high word of the address of the interrupt handler.  
+		further_interrupts:
+			dq 0, 0, 0, 0	; 7 of them   [master pic controller] 
+		floppy_interrupt_table_entry:
+			dw floppy_interrupt_irq6									; low word of the address
+			dw 0x0008													; code segment
+			db 0 														; reserved////
+			db 1_00_0_1110b 											; flags
+			dw 0														; high word of the address of the interrupt handler.  
+		more_table_interrupts:
+			dq 0
+			dq 0, 0, 0, 0, 0, 0, 0, 0 ; 8 of them [slave pic controller]
+	idtable_descriptor:
+		dw $ - idtable - 1
+		dd idtable
+
 section .bss
 	instring 		resb 1024
+	memory_block	resd 8192

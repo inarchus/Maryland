@@ -29,6 +29,37 @@ void main_shell(char * in_string)
 		{
 			display_stack_values(17, 0xabcd);//, 0x15253545);
 		}
+		else if(cstrings_equal(in_string, "fdisk init"))
+		{
+			cprintline("Starting Floppy Drive Init", 0x0200);
+			fdisk_init_controller();
+			cprintline("Floppy Drive Initialized", 0x0300);
+		}			
+		else if(startswith(in_string, "fdisk read"))
+		{
+			union FloppyDiskRead fdr;
+			fdr.unused = 0xff;
+			fdr.drive = 0;
+			fdr.track = 0; 					// already read all of track 0
+			fdisk_read_sector(&fdr, 1); 	// read starting at sector 1.  
+		}
+		else if(cstrings_equal(in_string, "display msr"))
+		{
+			fdisk_display_msr();			
+		}
+		else if(cstrings_equal(in_string, "fdisk recalibrate"))
+		{
+			fdisk_recalibrate(0);
+		}
+		else if(cstrings_equal(in_string, "fdisk controller version"))
+		{
+			print_string("ver=", 0x162c);
+			print_hex_byte(fdisk_version(), 0x1630);
+		}
+		else if(cstrings_equal(in_string, "fdisk identify drives"))
+		{
+			fdisk_identify();
+		}
 		else if(cstrings_equal(in_string, "cpuid"))
 		{
 			display_cpuid();

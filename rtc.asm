@@ -25,6 +25,9 @@ extern print_hex_dword
 ; from interrupts.asm
 extern set_interrupt_callback
 
+extern cmos_dump_registers
+extern cmos_get_register
+
 extern rtc_enable
 extern rtc_display_datetime
 extern rtc_get_tick				; returns a pointer to the low dword...
@@ -134,6 +137,44 @@ rtc_get_date_time:	; returns a pointer to the rtc_time data in eax
 	
 	ret
 
+cmos_get_register:
+	;; fastcall passes through ecx, all we need is the register number in cl, return in al
+	xor eax, eax
+	mov al, cl
+	or al, 0x80						; disable NMI for safety
+	cli								; for safety since apparently a partial read can result in corruption
+	out RTC_CMOS_PORT_A, al			; be quick about it
+	in al, RTC_CMOS_PORT_B			; there we go
+	sti								; re-enable interrupts
+	ret
+	
+cmos_dump_registers:
+	;; fastcall passes through ecx and edx
+	;; ecx = size to read (if we know the amount of values, also the size in memory allocated
+	;; edx = pointer to a memory block to read into.  
+	push ecx
+	push edi
+	mov edi, edx
+	xor eax, eax
+	
+	cmos_dump_registers_loop:
+		push eax
+		or al, 0x80				; disable NMI
+		out RTC_CMOS_PORT_A, al
+		in al, RTC_CMOS_PORT_B
+		stosb
+		pop eax
+		inc eax
+		dec cx
+	jnz cmos_dump_registers_loop
+	
+	pop edi
+	pop ecx
+	
+	ret
+
+
+;; this is the interrupt that runs whenever the RTC signals a clock pulse.
 rtc_interrupt_irq8:
 	push eax
 	push ebx

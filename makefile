@@ -1,4 +1,6 @@
 ASSEMBLER = nasm
+ASM_FLAGS = elf32
+CLANG_FLAGS = -target i386 -nostdlib -ffreestanding
 
 boot-clang: assemble
 	clang -target i386 -nostdlib -ffreestanding -c kernel.c -o kernel_c.o
@@ -14,18 +16,28 @@ boot-gcc: assemble
 	objcopy -O binary boot.elf boot.bin
 	qemu-img convert -f raw boot.bin -O qcow2 boot.bin boot.qcow2
 	
-assemble: boot.asm secondary.asm kernel.asm pit.asm memory.asm pic8259.asm floppy_driver.asm rtc.asm ata.asm interrupts.asm
-	$(ASSEMBLER) -f elf32 boot.asm -o boot.o
-	$(ASSEMBLER) -f elf32 secondary.asm -o secondary.o
-	$(ASSEMBLER) -f elf32 kernel.asm -o kernel.o
-	$(ASSEMBLER) -f elf32 interrupts.asm -o interrupts.o
-	$(ASSEMBLER) -f elf32 pic8259.asm -o pic8259.o
-	$(ASSEMBLER) -f elf32 pit.asm -o pit.o
-	$(ASSEMBLER) -f elf32 memory.asm -o memory.o
-	$(ASSEMBLER) -f elf32 cpuid.asm -o cpuid.o
-	$(ASSEMBLER) -f elf32 floppy_driver.asm -o floppy_driver.o
-	$(ASSEMBLER) -f elf32 rtc.asm -o rtc.o
-	$(ASSEMBLER) -f elf32 ata.asm -o ata.o
+assemble: boot.o secondary.o kernel.o pit.o pic8259.o interrupts.o memory.asm floppy_driver.o rtc.o ata.o
+	$(ASSEMBLER) -f $(ASM_FLAGS) memory.asm -o memory.o
+floppy_driver.o: floppy_driver.asm
+	$(ASSEMBLER) -f $(ASM_FLAGS) floppy_driver.asm -o floppy_driver.o
+rtc.o: rtc.asm
+	$(ASSEMBLER) -f $(ASM_FLAGS) rtc.asm -o rtc.o
+ata.o: ata.asm
+	$(ASSEMBLER) -f $(ASM_FLAGS) ata.asm -o ata.o
+boot.o: boot.asm
+	$(ASSEMBLER) -f $(ASM_FLAGS) boot.asm -o boot.o
+secondary.o: secondary.asm
+	$(ASSEMBLER) -f $(ASM_FLAGS) secondary.asm -o secondary.o
+kernel.o: kernel.asm ps2map.asm
+	$(ASSEMBLER) -f $(ASM_FLAGS) kernel.asm -o kernel.o
+interrupts.o: interrupts.asm
+	$(ASSEMBLER) -f $(ASM_FLAGS) interrupts.asm -o interrupts.o
+pic8259.o: pic8259.asm
+	$(ASSEMBLER) -f $(ASM_FLAGS) pic8259.asm -o pic8259.o
+pit.o: pit.asm
+	$(ASSEMBLER) -f $(ASM_FLAGS) pit.asm -o pit.o
+cpuid.o: cpuid.asm
+	$(ASSEMBLER) -f $(ASM_FLAGS) cpuid.asm -o cpuid.o
 clean:
 	rm boot.bin boot.elf boot.o secondary.o kernel.o kernel_c.o
 run:
@@ -44,4 +56,4 @@ boot-image: assemble
 vfd: boot-clang
 	cp boot.bin floppy.vfd
 	truncate -s 1474560 floppy.vfd
-	cp boot.img floppy.vfd /mnt/d/Projects/
+	cp floppy.vfd /mnt/d/Projects/

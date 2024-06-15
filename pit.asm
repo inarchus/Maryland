@@ -3,7 +3,9 @@
 ;;;;																																								;;;;
 ;;;;		The goal is to provide a driver for the programmable interval timer (PIT)				  																;;;;
 ;;;;																																			Eric Hamilton		;;;;
-;;;;																																			5/27/2024	  		;;;;
+;;;;																																			CR: 5/27/2024  		;;;;
+;;;;						Next Step: Allow changing the time and determine precise timings using this feature.									  				;;;;
+;;;;																																						  		;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 

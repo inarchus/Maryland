@@ -45,5 +45,6 @@ extern void rtc_toggle_display();
 
 extern void ata_identify_drives();
 extern void clear_screen();
+extern void display_ascii_characters();
 
 #endif 

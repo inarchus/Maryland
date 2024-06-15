@@ -73,6 +73,10 @@ void main_shell(char * in_string)
 			clear_screen();
 			cprintline("Screen Cleared", 0x0000);
 		}
+		else if(cstrings_equal(in_string, "display ascii"))
+		{
+			display_ascii_characters();			
+		}
 		else if(cstrings_equal(in_string, "rtc toggle"))
 		{
 			rtc_toggle_display();

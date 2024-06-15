@@ -43,11 +43,23 @@ start:
 	
 	mov ax, 0x0210				; read from floppy ah = 2 - sixteen sectors al = 0x10
 	mov dx, 0x0000 				; dx high word is the head (side of the disk, 1 indexed, lies, 0 indexed), low word is the drive  (0 indexed = fda, 1 = fdb)
-	mov cx, 0x0003				; cx high word is the track, low word is the sector
+	mov cx, 0x0003				; cx high word is the track, low word is the sector 
+								; this may be because sector 1 has the 0-stage bootloader code, sector 2 is empty, sector 3 has offset 0x8000+ so 3 to 18 are 16 sectors of data.  
 	mov bx, kernel_segment		; clear the segment for the initial assembly reads
 	mov es, bx
 	mov bx, load_address		; bx contains the location to write in the segment es:bx
 	int 0x13	 				; read from floppy disk drive
+	
+	;; we're going to read a second track of sectors in order to make sure we have enough space since we're running a little low in protected mode.  
+	mov ax, 0x0212				; read from floppy ah = 2 - all eighteen sectors al = 0x12
+	mov dx, 0x0000 				; [dh = head, dl = fda]
+	mov cx, 0x0101				; [ch = track 1 (0 indexed), cl = sector 1 (1-indexed)]
+	
+	mov bx, 0x1000				;
+	mov es, bx					; set the destination segment to 1:0000 so that we can write there
+	xor bx, bx					;
+	int 0x13	 				; read from floppy disk drive
+	mov es, bx					; reset the segment
 	
 	xor ax, ax
 	mov es, ax

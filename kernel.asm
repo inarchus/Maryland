@@ -1,9 +1,16 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;							                    				kernel.asm																					    ;;;;
+;;;;																																								;;;;
+;;;;		This code is the entry point and provides basic functionality for a 32-bit kernel of Maryland															;;;;
+;;;;																																			Eric Hamilton		;;;;
+;;;;																																						  		;;;;
+;;;;																																						  		;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ; still to do with keyboard driver: fix the function keys, scroll lock, pause, caps lock probably too
 ; shift + space doesn't seem to work, keypad enter isn't working perfectly either.  F[i] keys not implemented
 ; get gdb + qemu working for faster debugging
 ; figure out how to control where on the floppy everything goes.  
-;	perhaps write a driver using the control registers - done (using DMA)
-;	then another using dma ... or maybe just one that works you crazy-man. - done
 ;	try to get PIO working for the floppy drive read command as well, bypass the need for DMA
 ; 	add support for floppy controller version 0x81 rather than 0x90 described on osdev.net [no idea where to find documentation for that]
 ; 	
@@ -12,10 +19,6 @@
 [bits 32]
 
 extern empty_string
-extern rtc_display_byte
-
-extern pit_interrupt_table_entry
-
 extern kernel_loader_entry
 extern cgetline
 extern cprintline
@@ -35,7 +38,6 @@ extern printlinef
 extern printstr
 extern printstrf
 extern strings_equal
-extern configure_pit
 extern print_hex_word
 extern chex_to_number
 extern startswith
@@ -47,23 +49,28 @@ extern print_hex_byte
 extern print_hex_word
 extern print_hex_dword
 extern hex_str_to_value
-
 extern display_hex_byte
 extern display_ascii_characters
 
+; from rtc.asm
 extern rtc_display_datetime
 extern rtc_get_tick
 extern rtc_enable
+;extern rtc_display_byte
 
+; from pit.asm
 extern pit_interrupt_irq0
 extern pit_wait
+extern configure_pit
+;extern pit_interrupt_table_entry
 
 ; from pic8259.asm
 extern configure_pic
 extern display_pic_registers
 
-
+; from interrupts.asm
 extern configure_interrupt_descriptor_table
+extern set_interrupt_callback
 
 section .text
 kernel_loader_entry:
@@ -75,13 +82,13 @@ kernel_loader_entry:
 	
 	call configure_interrupt_descriptor_table		; calls lidt
 	; we can add some safety checks to determine if sse exists on the machine.  
-	call enable_sse
+	call enable_sse			; currently really enabling MMX more than SSE, but we should see what is possible.  
 	
-	call configure_pit
-	call rtc_enable
+	call configure_pit		; Programmable Interval Timer IRQ0
+	call rtc_enable			; Real Time Clock IRQ 8
 
 	; configure the PIC to use the PIT, Floppy Drive and RTC for now, add more features
-	call configure_pic
+	call configure_pic		; PICs allow IRQs to flow from hardware to the processor as interrupts
 
 	push instring
 	call main_shell

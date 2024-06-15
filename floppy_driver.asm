@@ -76,6 +76,7 @@ FLOPPY_DRIVE_CMOS_REGISTER	equ 	0x10
 extern printstr
 extern printstrf
 extern printlinef
+extern printline
 extern print_hex_dword
 extern getchar_pressed
 extern pit_wait
@@ -89,6 +90,9 @@ extern fdisk_read_sector
 extern fdisk_recalibrate
 extern fdisk_version
 extern fdisk_identify
+
+; from interrupt.asm
+extern set_interrupt_callback
 
 fdisk_verify_ready:			;	modifies ax, returns in al
 	push edx
@@ -211,6 +215,10 @@ fdisk_init_controller:
 	; Send a Lock command.
 	; Do a Controller Reset procedure.
 	; Send a Recalibrate command to each of the drives.
+
+	mov ecx, 0x26
+	mov edx, floppy_interrupt_irq6
+	call set_interrupt_callback
 
 	push ebx
 	
@@ -468,7 +476,27 @@ fdisk_read_sector:
 	pop ebx
 	ret
 
+floppy_interrupt_irq6:
+	push eax
+	push edx
+	push esi
+	
+	mov dx, 0x0500
+	mov esi, irq6_recieved_str
+	call printline
+	
+	; end of interrupt
+	mov al, 0x20
+	out 0x20, al
+
+	pop esi
+	pop edx	
+	pop eax
+	
+	iretd
+
 section .data
+	irq6_recieved_str				db	"IRQ6 Received.", 0
 	fdisk_read_start_string 		db	 'Starting Floppy Disk Read', 0
 	msr_strings 	db 'ACTA', 0
 					db 'ACTB', 0

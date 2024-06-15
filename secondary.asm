@@ -1,19 +1,21 @@
-;	Next step, replace int 0x16 with PS/2 driver <-- done in the 32 bit version.  Unnecessary here as long as bios works.  
-;	Then we should be ready to go to 32 bit mode once we fully understand those things and can load and write to a floppy, print and get input from the keyboard <-- already have
-;	build a GDT and then finish executing the protected mode jump.  <-- done
-;	Then replace floppy int 0x13 with floppy controller in/out commands.  <-- next priority, still need to do this
-;	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;							                    			secondary.asm																					    ;;;;
+;;;;																																								;;;;
+;;;;		This code is the secondary stage 16-bit bootloader which allows hexdumps, floppy reads, etc																;;;;
+;;;;																																			Eric Hamilton		;;;;
+;;;;																																						  		;;;;
+;;;;																																						  		;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	
 
 [bits 16]
 [segment 0x8000]
 
 extern kernel_loader_entry
 extern single_scan_code_map
-;extern getchar_pressed
 extern translate_scancode
-;extern calculate_position
-;extern move_cursor_to_position
 extern string_length
+extern pit_interrupt_irq0
 
 section .text
 
@@ -65,8 +67,9 @@ init:
 		hlt
 		jmp init
 
-menu_options:
 
+
+menu_options:
 	test_set_location: ; not currently used but we'll do it for symmetry
 		mov di, input_line
 		mov si, write_string
@@ -233,9 +236,10 @@ measure_low_memory:
 enter_protected_mode:
 	call a20_verify
 	test ax, ax
-	jz enter_protected_mode_return
+	jnz epm_pass_a20_enable
+	call a20_enable
+	epm_pass_a20_enable:
 	
-	; call get_char
 	cli ; disable interrupts
 	
 	; call get_char	
@@ -830,7 +834,7 @@ string_length:
 	push di
 	push cx
 	mov di, si
-	xor ax, ax 		; ensure that al is set to zero
+	xor eax, eax 	; ensure that al is set to zero
 	mov cx, 0xffff	; limit of 65535 length
 	repnz scasb
 	not cx
@@ -1205,17 +1209,17 @@ section .data
 			db 0x0 				; base second part
 			db 10011011b		; access bits
 			db 1111_1100b		; low nibble = flags, high nibble = more of the limit
-			db 0x0 ; high part of the base
-		gdt_data_seg:				; data descriptor
+			db 0x0 				; high part of the base
+		gdt_data_seg:			; data descriptor
 			dw 0xFFFF			; limit lowest 16 bits
 			dw 0x0				; base lowest 16 bits
 			db 0x0 				; base second part
 			db 10010011b		; access bits
 			db 1111_1100b		; low nibble = flags, high nibble = more of the limit
-			db 0x0 ; high part of the base
+			db 0x0 				; high part of the base
 		gdt_end:
-		gdtable_size 	dw 		$ - gdtable - 1 		; limit (Size of GDT)
-		dd gdtable
+			gdtable_size 	dw 		$ - gdtable - 1 		; limit (Size of GDT)
+							dd 		gdtable
 
 section .bss
 	input_line resb 80

@@ -2,21 +2,19 @@ ASSEMBLER = nasm
 ASM_FLAGS = elf32
 CLANG_FLAGS = -target i386 -nostdlib -ffreestanding
 
-boot-clang: assemble
-	clang -target i386 -nostdlib -ffreestanding -c kernel.c -o kernel_c.o
-	clang -target i386 -nostdlib -ffreestanding -c memory.c -o cmemory.o
-	clang -target i386 -nostdlib -ffreestanding -c user_interface.cpp -o user_interface.o
-	ld -m elf_i386 --build-id=none -T link.ld boot.o secondary.o kernel.o kernel_c.o interrupts.o pit.o memory.o cmemory.o pic8259.o cpuid.o floppy_driver.o rtc.o ata.o user_interface.o -o boot.elf
+ASSEMBLY_OBJECTS = boot.o secondary.o kernel.o pit.o pic8259.o interrupts.o memory.o floppy_driver.o rtc.o ata.o cpuid.o
+CLANG_OBJECTS = user_interface.o kernel_c.o memory_c.o
+
+boot: assemble memory.c kernel.c user_interface.cpp user_interface.h
+	clang $(CLANG_FLAGS) -c kernel.c -o kernel_c.o
+	clang $(CLANG_FLAGS) -c memory.c -o memory_c.o
+	clang $(CLANG_FLAGS) -c user_interface.cpp -o user_interface.o
+	ld -m elf_i386 --build-id=none -T link.ld $(ASSEMBLY_OBJECTS) $(CLANG_OBJECTS) -o boot.elf
 	objcopy -O binary boot.elf boot.bin
 	qemu-img convert -f raw boot.bin -O qcow2 boot.bin boot.qcow2
-	@ls -l | grep "boot.bin"
-boot-gcc: assemble 
-	gcc -m32 -fpie --freestanding -fno-asynchronous-unwind-tables -c kernel.c -o kernel_c.o
-	ld -m elf_i386 --build-id=none -T link.ld boot.o secondary.o kernel.o kernel_c.o pit.o memory.o cmemory.o rtc.o -o boot.elf
-	objcopy -O binary boot.elf boot.bin
-	qemu-img convert -f raw boot.bin -O qcow2 boot.bin boot.qcow2
-	
-assemble: boot.o secondary.o kernel.o pit.o pic8259.o interrupts.o memory.asm floppy_driver.o rtc.o ata.o
+	@stat boot.bin | grep "Size:"
+
+assemble: $(ASSEMBLY_OBJECTS) 
 	$(ASSEMBLER) -f $(ASM_FLAGS) memory.asm -o memory.o
 floppy_driver.o: floppy_driver.asm
 	$(ASSEMBLER) -f $(ASM_FLAGS) floppy_driver.asm -o floppy_driver.o
@@ -39,7 +37,7 @@ pit.o: pit.asm
 cpuid.o: cpuid.asm
 	$(ASSEMBLER) -f $(ASM_FLAGS) cpuid.asm -o cpuid.o
 clean:
-	rm boot.bin boot.elf boot.o secondary.o kernel.o kernel_c.o
+	rm *.o boot.bin
 run:
 	qemu-system-i386 -fda boot.qcow2 -hda /mnt/d/Virtual\ Machines/Maryland/Maryland.vmdk -boot order=a -cpu pentium3,sse=on
 # -D qemu_i386.log -d cpu ; we want to turn logging on but this is too much info.  

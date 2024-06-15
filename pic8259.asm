@@ -47,7 +47,7 @@ configure_pic:
 
 	; set the masks so that PIT, Floppy and Mouse are enabled, currently keep keyboard interrupts disabled.  
 	;; i think that 0's are enabled, 1 is 'masked'
-	mov cx, 11111111_10111100b
+	mov cx, 11111110_10111000b
 	call send_pic_word
 	
 	pop eax

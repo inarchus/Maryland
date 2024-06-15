@@ -3,17 +3,17 @@ ASSEMBLER = nasm
 boot-clang: assemble
 	clang -target i386 -nostdlib -ffreestanding -c kernel.c -o kernel_c.o
 	clang -target i386 -nostdlib -ffreestanding -c memory.c -o cmemory.o
-	ld -m elf_i386 --build-id=none -T link.ld boot.o secondary.o kernel.o kernel_c.o pit.o memory.o cmemory.o pic8259.o cpuid.o -o boot.elf
+	ld -m elf_i386 --build-id=none -T link.ld boot.o secondary.o kernel.o kernel_c.o pit.o memory.o cmemory.o pic8259.o cpuid.o floppy_driver.o rtc.o ata.o -o boot.elf
 	objcopy -O binary boot.elf boot.bin
 	qemu-img convert -f raw boot.bin -O qcow2 boot.bin boot.qcow2
 	@ls -l | grep "boot.bin"
 boot-gcc: assemble 
 	gcc -m32 -fpie --freestanding -fno-asynchronous-unwind-tables -c kernel.c -o kernel_c.o
-	ld -m elf_i386 --build-id=none -T link.ld boot.o secondary.o kernel.o kernel_c.o pit.o memory.o cmemory.o -o boot.elf
+	ld -m elf_i386 --build-id=none -T link.ld boot.o secondary.o kernel.o kernel_c.o pit.o memory.o cmemory.o rtc.o -o boot.elf
 	objcopy -O binary boot.elf boot.bin
 	qemu-img convert -f raw boot.bin -O qcow2 boot.bin boot.qcow2
 	
-assemble: boot.asm secondary.asm kernel.asm pit.asm memory.asm pic8259.asm
+assemble: boot.asm secondary.asm kernel.asm pit.asm memory.asm pic8259.asm floppy_driver.asm rtc.asm ata.asm
 	$(ASSEMBLER) -f elf32 boot.asm -o boot.o
 	$(ASSEMBLER) -f elf32 secondary.asm -o secondary.o
 	$(ASSEMBLER) -f elf32 kernel.asm -o kernel.o
@@ -21,16 +21,20 @@ assemble: boot.asm secondary.asm kernel.asm pit.asm memory.asm pic8259.asm
 	$(ASSEMBLER) -f elf32 pit.asm -o pit.o
 	$(ASSEMBLER) -f elf32 memory.asm -o memory.o
 	$(ASSEMBLER) -f elf32 cpuid.asm -o cpuid.o
+	$(ASSEMBLER) -f elf32 floppy_driver.asm -o floppy_driver.o
+	$(ASSEMBLER) -f elf32 rtc.asm -o rtc.o
+	$(ASSEMBLER) -f elf32 ata.asm -o ata.o
 clean:
 	rm boot.bin boot.elf boot.o secondary.o kernel.o kernel_c.o
 run:
-	qemu-system-i386 -fda boot.qcow2 -boot order=a
+	qemu-system-i386 -fda boot.qcow2 -hda /mnt/d/Virtual\ Machines/Maryland/Maryland.vmdk -boot order=a -cpu pentium3,sse=on
+# -D qemu_i386.log -d cpu ; we want to turn logging on but this is too much info.  
 run64:
 	qemu-system-x86_64 -fda boot.qcow2 -cpu Nehalem,sse2=on
-
+# -cpu Nehalem
 boot-image: assemble
 	gcc -m32 -fno-pic --freestanding -fno-asynchronous-unwind-tables -c kernel.c -o kernel_c.o
-	ld -m elf_i386 --oformat binary --build-id=none -T link.ld boot.o secondary.o kernel.o kernel_c.o pit.o -o boot.img
+	ld -m elf_i386 --oformat binary --build-id=none -T link.ld boot.o secondary.o kernel.o kernel_c.o pit.o rtc.o -o boot.img
 	cp boot.img /mnt/d/Projects/
 
 # A vfd file is literally a raw file containing exactly 1440kb or 1,474,560 bytes.  The bin is also a raw file, but doesn't have that exact requirement.  

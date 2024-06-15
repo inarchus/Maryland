@@ -1,5 +1,5 @@
 ; barely functional, currently it faults on both VMWare and VirtualBox, though it works on QEMU for now.  
-; 
+;  https://cpctech.cpcwiki.de/docs/i8272/8272sp.htm
 ;
 
 FDA_SRA         equ 0x3F0	;  read-only STATUS_REGISTER_A
@@ -119,41 +119,44 @@ fdisk_identify:
 	; always displays zeros, no drives detected even though there are drives.  
 	push edx
 
+	cli
 	mov dx, 0x70
 	mov al, FLOPPY_DRIVE_CMOS_REGISTER | 0x80
 	out dx, al
 	
 	; wait here write a wait function using the PIT	
-	
-	mov ecx, 1000
-	keep_waiting:
-	dec ecx
-	jnz keep_waiting
-	
-	;call pit_wait
-	
 	mov dx, 0x71
 	in al, dx
+	sti
+
+	; mov ecx, eax
+	; mov edx, 0x1500
+	; call print_hex_dword
+	
+	push eax
 	
 	mov esi, primary_string
-	mov dx, 0x142e
+	mov dx, 0x122e
 	call printstr
+	
+	pop eax
 
-	push eax
 	and eax, 0x000000f0
 	
-	mov dx, 0x1440
+	push eax
+	
+	mov dx, 0x1240
 	lea esi, [drive_types + eax]
 	call printstr
 	
-	mov dx, 0x152e
+	mov dx, 0x132e
 	mov esi, secondary_string
 	call printstr
 
 	pop eax
 	and eax, 0x0000000f
 	shl al, 4
-	mov dx, 0x1540
+	mov dx, 0x1340
 	lea esi, [drive_types + eax]
 	call printstr
 	
@@ -448,13 +451,6 @@ fdisk_read_sector:
 	mov edi, fdisk_sector_data
 	
 	call getchar_pressed
-	;mov ecx, 4
-	;read_loop:
-	;	mov dx, FDA_FIFO
-	;	in al, dx
-	;	stosb
-	;	dec ecx
-	;jnz read_loop
 	
 	mov ecx, [0x1000]
 	mov dx, 0x0600
@@ -484,11 +480,11 @@ section .data
 					db 'RQM ', 0
 	primary_string	  db "Primary Drive:", 0
 	secondary_string  db "Secondary Drive:", 0
-	drive_types	 	  db "No Drive      ", 0
-					  db "360 KB, 5.25in", 0
-					  db "1.2 MB, 5.25in", 0
-					  db "720 KB, 5.25in", 0
-					  db "1.44 MB, 3.5in", 0
-					  db "2.88 MB, 3.5in", 0
+	drive_types	 	  db "No Drive       ", 0
+					  db "360 KB, 5.25 in", 0
+					  db "1.2 MB, 5.25 in", 0
+					  db "720 KB, 5.25 in", 0
+					  db "1.44 MB, 3.5 in", 0
+					  db "2.88 MB, 3.5 in", 0
 section .bss
 	fdisk_sector_data 				resb 512

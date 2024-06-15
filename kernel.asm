@@ -11,6 +11,9 @@
 ;	https://qemu.weilnetz.de/w32/2012/2012-12-04/qemu-doc.html
 [bits 32]
 
+extern empty_string
+extern rtc_display_byte
+
 extern pit_interrupt_table_entry
 
 extern kernel_loader_entry
@@ -21,10 +24,13 @@ extern hex_dump
 extern print_string
 extern getchar_pressed
 
+extern clear_screen
+
 extern single_scan_code_map
 extern getchar_pressed
 extern string_length
 extern main_shell
+extern printline
 extern printlinef
 extern printstr
 extern printstrf
@@ -42,12 +48,18 @@ extern print_hex_word
 extern print_hex_dword
 extern hex_str_to_value
 
+extern display_hex_byte
+extern rtc_display_datetime
+extern rtc_get_tick
+extern rtc_enable
+
 extern pit_interrupt_irq0
 extern pit_wait
 
 ; from pic8259.asm
 extern configure_pic
 extern display_pic_registers
+
 
 section .text
 kernel_loader_entry:
@@ -58,32 +70,46 @@ kernel_loader_entry:
 	call printline
 	
 	lidt [idtable_descriptor]
-	sti
 
 	; we can add some safety checks to determine if sse exists on the machine.  
 	call enable_sse
 	
 	; configure the PIC to use the PIT, Floppy Drive and Mouse
 	call configure_pic
+
+	call rtc_enable
 	call configure_pit
+
+	sti
 
 	push instring
 	call main_shell
 
 clear_screen:
+	push ecx
+	push edx
+	push esi 
+	
 	mov cx, 24
 	xor dx, dx
-	
 	mov esi, empty_string
 	
 	clear_screen_loop:
-		add dx, 80
+		inc dh
 		call printline
 		dec cx
 	jnz clear_screen_loop
 	
+	pop esi
+	pop edx
+	pop ecx
+	
 	ret
+	
 
+
+; https://wiki.osdev.org/CPU_Registers_x86
+; reference for mmx instruction sets https://docs.oracle.com/cd/E18752_01/html/817-5477/eojdc.html
 enable_sse:
 	; doesn't seem to work with the i386 emulation even in pentium 3 or 4 mode, must investigate further
 	
@@ -403,13 +429,17 @@ print_string:
 	ret
 
 printline:
+	push eax
 	mov al, 0x0f
 	call printlinef
+	pop eax
 	ret
 
 printstr:
+	push eax
 	mov al, 0x0f
 	call printstrf
+	pop eax
 	ret
 	
 printlinef:
@@ -868,8 +898,10 @@ print_hex_word:
 
 
 print_hex_byte:
+	push eax
 	movzx eax, cl
 	call display_hex_byte
+	pop eax
 	ret
 
 display_hex_byte:
@@ -1109,7 +1141,58 @@ floppy_interrupt_irq6:
 	pop eax
 	
 	iretd
+
+rtc_interrupt_irq8:
+	push eax
+	push ebx
+	push edx
+
+	test byte [rtc_display_byte], 1
+	jz irq8_bypass_display
+
+	call rtc_get_tick
+	inc dword [eax]
 	
+	cmp dword [eax], 0xffffffff
+	jne irq8_bypass_increment_high_word
+	
+	inc dword [eax + 4]
+	mov dword [eax], 0
+	
+	irq8_bypass_increment_high_word:
+	
+	mov ebx, [eax]
+	and ebx, 0x000001ff
+	jnz irq8_bypass_display
+	
+	push ecx
+	mov ecx, [eax]
+	mov dx, 0x1430
+	call print_hex_dword
+	
+	
+	mov cx, 0x1530
+	call rtc_display_datetime
+	pop ecx	
+	
+	irq8_bypass_display:
+	
+	mov al, 0x20
+	out 0xa0, al
+	out 0x20, al
+
+	mov al, 0x0c		; must read the C register or else it won't call again
+	mov dx, 0x70		; cannot just set the interrupt as cleared
+	out dx, al			; do this and then it'll run again! who knew!
+	inc dx
+	in al, dx			
+
+	
+	pop edx
+	pop ebx
+	pop eax
+	iretd
+
 mouse_interrupt_irq12:
 	push eax
 	push edx
@@ -1118,14 +1201,10 @@ mouse_interrupt_irq12:
 	mov dx, 0x0500
 	mov esi, irq12_recieved_str
 	call printline
-	
-
-	; end of interrupt
-	mov al, 0xa0
-	out 0xa0, al
 
 	; end of interrupt
 	mov al, 0x20
+	out 0xa0, al
 	out 0x20, al
 
 	pop esi
@@ -1185,13 +1264,20 @@ section .data
 			db 0 														; reserved////
 			db 1_00_0_1110b 											; flags
 			dw 0														; high word of the address of the interrupt handler.  
-		more_table_interrupts:
+		irq_7_currently_unused:
 			dq 0
-			dq 0, 0, 0, 0, 0, 0, 0, 0 ; 8 of them [slave pic controller]
+		rtc_interrupt_table_entry:
+			dw rtc_interrupt_irq8										; low word of the address
+			dw 0x0008													; code segment
+			db 0 														; reserved////
+			db 1_00_0_1110b 											; flags
+			dw 0														; high word of the address of the interrupt handler.  			
+		last_table_interrupts:
+			dq 0, 0, 0, 0, 0, 0, 0 ; 8 of them [slave pic controller]
 	idtable_descriptor:
 		dw $ - idtable - 1
 		dd idtable
-
+	rtc_display_byte db 1
 section .bss
 	instring 		resb 1024
-	memory_block	resd 8192
+	; memory_block	resd 8192

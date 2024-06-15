@@ -26,6 +26,8 @@ SECTIONS
 		memory.o (.text);
 		cmemory.o (.text);
 		cpuid.o (.text);
+		rtc.o (.text)
+		ata.o (.text);
     }
 
     .data1 : SUBALIGN(2) {
@@ -36,6 +38,8 @@ SECTIONS
 		memory.o (.data);
 		cmemory.o (.data);
 		cpuid.o (.data);
+		rtc.o (.data);
+		ata.o (.data);
 		/* *(.rodata*); */
     }
 
@@ -48,5 +52,7 @@ SECTIONS
 		cmemory.o (.bss);
 		pit.o (.bss)
 		pic8259.o (.bss);
+		rtc.o (.bss);
+		ata.o (.bss);
 	}
 }

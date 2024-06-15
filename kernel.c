@@ -60,9 +60,23 @@ void main_shell(char * in_string)
 		{
 			fdisk_identify();
 		}
+		else if(cstrings_equal(in_string, "ata identify drives"))
+		{
+			 ata_identify_drives();
+		}
 		else if(cstrings_equal(in_string, "cpuid"))
 		{
 			display_cpuid();
+		}
+		else if(cstrings_equal(in_string, "clear screen"))
+		{
+			clear_screen();
+			cprintline("Screen Cleared", 0x0000);
+		}
+		else if(cstrings_equal(in_string, "rtc toggle"))
+		{
+			rtc_toggle_display();
+			clear_screen();
 		}
 		else
 		{

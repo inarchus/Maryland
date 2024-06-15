@@ -40,4 +40,10 @@ extern void __fastcall fdisk_recalibrate(dword drive_number);
 extern byte fdisk_version();
 extern void fdisk_identify();
 
+extern void rtc_display_datetime(dword position);
+extern void rtc_toggle_display();
+
+extern void ata_identify_drives();
+extern void clear_screen();
+
 #endif 

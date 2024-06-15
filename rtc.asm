@@ -17,24 +17,33 @@ RTC_YEAR			equ		0x09
 RTC_CENTURY			equ		0x32
 
 
-extern rtc_enable
 extern printstrf
-extern print_hex_byte
 extern display_hex_byte
+extern print_hex_byte
+extern print_hex_dword
+
+; from interrupts.asm
+extern set_interrupt_callback
+
+extern rtc_enable
 extern rtc_display_datetime
 extern rtc_get_tick				; returns a pointer to the low dword...
-extern rtc_display_byte
+;extern rtc_display_byte
 extern rtc_toggle_display
 
 section .text
 
 rtc_enable:
+	mov ecx, 0x28						; set interrupt 0x20 + 0x8
+	mov edx, rtc_interrupt_irq8
+	call set_interrupt_callback
+
 	cli
 	push edx
 	push eax
 	
 	mov dx, RTC_CMOS_PORT_A
-	mov al, 0x8b				; select status register B + disable NMI = 0x80
+	mov al, 0x8b						; select status register B + disable NMI = 0x80
 	out dx, al
 	
 	inc dx
@@ -48,7 +57,7 @@ rtc_enable:
 	
 	inc dx
 	pop eax
-	or al, 0x40					; enable the IRQ8
+	or al, 0x40							; enable the IRQ8
 	out dx, al					
 	
 	pop eax
@@ -56,8 +65,9 @@ rtc_enable:
 	
 	mov dword [rtc_time], 0
 	mov dword [rtc_time + 4], 0
-	
+
 	sti
+
 	ret
 
 
@@ -124,7 +134,54 @@ rtc_get_date_time:	; returns a pointer to the rtc_time data in eax
 	
 	ret
 
-; rtc_display_byte
+rtc_interrupt_irq8:
+	push eax
+	push ebx
+	push edx
+
+	test byte [rtc_display_byte], 1
+	jz irq8_bypass_display
+
+	cmp dword [rtc_current_tick_low], 0xffffffff
+	jne irq8_bypass_increment_high_word
+	
+	inc dword [rtc_current_tick_high]
+	mov dword [rtc_current_tick_low], 0xffffffff
+	
+	irq8_bypass_increment_high_word:
+	inc dword [rtc_current_tick_low]	
+	
+	mov ebx, [rtc_current_tick_low]
+	and ebx, 0x000001ff
+	jnz irq8_bypass_display
+	
+	push ecx
+	mov ecx, [rtc_current_tick_low]
+	mov dx, 0x1832
+	call print_hex_dword
+	
+	
+	mov cx, 0x1530
+	call rtc_display_datetime
+	pop ecx	
+	
+	irq8_bypass_display:
+	
+	mov al, 0x20
+	out 0xa0, al
+	out 0x20, al
+
+	mov al, 0x0c		; must read the C register or else it won't call again
+	mov dx, 0x70		; cannot just set the interrupt as cleared
+	out dx, al			; do this and then it'll run again! who knew!
+	inc dx
+	in al, dx			
+
+	
+	pop edx
+	pop ebx
+	pop eax
+	iretd
 
 rtc_toggle_display:
 	inc byte [rtc_display_byte]
@@ -132,6 +189,7 @@ rtc_toggle_display:
 	ret
 
 section .data
+	rtc_display_byte db 1
 	rtc_rate	db		0000_0110b
 	port_order 	db		0x32, 0x09, 0x08, 0x07, 0x06, 0x04, 0x02, 0x00
 section .bss

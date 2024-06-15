@@ -49,6 +49,8 @@ extern print_hex_dword
 extern hex_str_to_value
 
 extern display_hex_byte
+extern display_ascii_characters
+
 extern rtc_display_datetime
 extern rtc_get_tick
 extern rtc_enable
@@ -61,6 +63,8 @@ extern configure_pic
 extern display_pic_registers
 
 
+extern configure_interrupt_descriptor_table
+
 section .text
 kernel_loader_entry:
 	call clear_screen
@@ -69,18 +73,15 @@ kernel_loader_entry:
 	mov esi, protected_mode_string
 	call printline
 	
-	lidt [idtable_descriptor]
-
+	call configure_interrupt_descriptor_table		; calls lidt
 	; we can add some safety checks to determine if sse exists on the machine.  
 	call enable_sse
 	
-	; configure the PIC to use the PIT, Floppy Drive and Mouse
-	call configure_pic
-
-	call rtc_enable
 	call configure_pit
+	call rtc_enable
 
-	sti
+	; configure the PIC to use the PIT, Floppy Drive and RTC for now, add more features
+	call configure_pic
 
 	push instring
 	call main_shell
@@ -841,6 +842,52 @@ check_control_keys:
 	ret
 
 
+display_ascii_characters:
+	call clear_screen
+	
+	mov cx, 16
+	
+	mov al, 0
+	mov dx, 0x0208
+	ascii_row_legend_loop:
+		call display_hex_byte
+		inc al
+		add dx, 4
+		dec cx
+	jnz ascii_row_legend_loop
+	
+	mov cx, 16
+	mov al, 0
+	mov dx, 0x0304
+	ascii_col_legend_loop:
+		call display_hex_byte
+		add al, 0x10
+		inc dh
+		dec cx
+	jnz ascii_col_legend_loop
+	
+	mov cx, 16
+	mov dx, 0x0308
+	ascii_outer_loop:
+		push ecx
+		push edx
+		mov cx, 16
+		ascii_inner_loop:
+			mov ah, 0x0f
+			call printcharf
+			add dx, 4
+			inc ax
+			dec cx
+		jnz ascii_inner_loop
+		pop edx
+		pop ecx
+		add dh, 1
+		dec cx
+	jnz ascii_outer_loop
+	
+	ret
+
+
 display_stack_values:
 	push dword 0x0200
 	push dword [esp + 4] ; actually 0
@@ -1086,28 +1133,6 @@ pit_wait:
 	ret
 	
 
-pit_interrupt_irq0:
-	push eax
-	push edx
-	push esi
-	
-	inc dword [current_tick]
-	mov dx, 0x1840
-	push ecx
-	mov ecx, [current_tick]
-	call print_hex_dword
-	pop ecx
-	
-	; end of interrupt
-	mov al, 0x20
-	out 0x20, al
-
-	pop esi
-	pop edx	
-	pop eax
-	
-	iretd
-
 keyboard_irq1:
 	push eax
 	push edx
@@ -1123,75 +1148,6 @@ keyboard_irq1:
 	
 	iretd
 
-floppy_interrupt_irq6:
-	push eax
-	push edx
-	push esi
-	
-	mov dx, 0x0500
-	mov esi, irq6_recieved_str
-	call printline
-	
-	; end of interrupt
-	mov al, 0x20
-	out 0x20, al
-
-	pop esi
-	pop edx	
-	pop eax
-	
-	iretd
-
-rtc_interrupt_irq8:
-	push eax
-	push ebx
-	push edx
-
-	test byte [rtc_display_byte], 1
-	jz irq8_bypass_display
-
-	call rtc_get_tick
-	inc dword [eax]
-	
-	cmp dword [eax], 0xffffffff
-	jne irq8_bypass_increment_high_word
-	
-	inc dword [eax + 4]
-	mov dword [eax], 0
-	
-	irq8_bypass_increment_high_word:
-	
-	mov ebx, [eax]
-	and ebx, 0x000001ff
-	jnz irq8_bypass_display
-	
-	push ecx
-	mov ecx, [eax]
-	mov dx, 0x1430
-	call print_hex_dword
-	
-	
-	mov cx, 0x1530
-	call rtc_display_datetime
-	pop ecx	
-	
-	irq8_bypass_display:
-	
-	mov al, 0x20
-	out 0xa0, al
-	out 0x20, al
-
-	mov al, 0x0c		; must read the C register or else it won't call again
-	mov dx, 0x70		; cannot just set the interrupt as cleared
-	out dx, al			; do this and then it'll run again! who knew!
-	inc dx
-	in al, dx			
-
-	
-	pop edx
-	pop ebx
-	pop eax
-	iretd
 
 mouse_interrupt_irq12:
 	push eax
@@ -1225,7 +1181,6 @@ section .data
 	hexdump_str			    db  "Hexdump: ", 0
 	protected_mode_string 	db 	"We have entered protected mode.", 0
 	extended_code_str		db 	"We have just received an extended code", 0
-	irq6_recieved_str		db	"IRQ6 Received.", 0
 	irq12_recieved_str		db	"IRQ12 Received.", 0
 	shift_down_string		db  "SHIFT", 0
 	ctrl_down_string		db  "CTRL ", 0
@@ -1238,46 +1193,8 @@ section .data
 	mxcsr_reg_value			dd 0x0000_1F80
 	current_tick 			dw 0x0
 
-	idtable:
-		prior_interrupts:
-			dq 0, 0, 0, 0, 0, 0, 0, 0
-			dq 0, 0, 0, 0, 0, 0, 0, 0
-			dq 0, 0, 0, 0, 0, 0, 0, 0
-			dq 0, 0, 0, 0, 0, 0, 0, 0
-		pit_interrupt_table_entry:
-			dw pit_interrupt_irq0										; low word of the address
-			dw 0x0008													; code segment
-			db 0 														; reserved////
-			db 1_00_0_1110b 											; flags
-			dw 0														; high word of the address of the interrupt handler.  
-		keyboard_interrupt_table_entry:
-			dw keyboard_irq1											; low word of the address
-			dw 0x0008													; code segment
-			db 0 														; reserved////
-			db 1_00_0_1110b 											; flags
-			dw 0														; high word of the address of the interrupt handler.  
-		further_interrupts:
-			dq 0, 0, 0, 0	; 7 of them   [master pic controller] 
-		floppy_interrupt_table_entry:
-			dw floppy_interrupt_irq6									; low word of the address
-			dw 0x0008													; code segment
-			db 0 														; reserved////
-			db 1_00_0_1110b 											; flags
-			dw 0														; high word of the address of the interrupt handler.  
-		irq_7_currently_unused:
-			dq 0
-		rtc_interrupt_table_entry:
-			dw rtc_interrupt_irq8										; low word of the address
-			dw 0x0008													; code segment
-			db 0 														; reserved////
-			db 1_00_0_1110b 											; flags
-			dw 0														; high word of the address of the interrupt handler.  			
-		last_table_interrupts:
-			dq 0, 0, 0, 0, 0, 0, 0 ; 8 of them [slave pic controller]
-	idtable_descriptor:
-		dw $ - idtable - 1
-		dd idtable
-	rtc_display_byte db 1
+
+
 section .bss
 	instring 		resb 1024
 	; memory_block	resd 8192

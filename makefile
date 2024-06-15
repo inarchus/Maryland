@@ -3,7 +3,8 @@ ASSEMBLER = nasm
 boot-clang: assemble
 	clang -target i386 -nostdlib -ffreestanding -c kernel.c -o kernel_c.o
 	clang -target i386 -nostdlib -ffreestanding -c memory.c -o cmemory.o
-	ld -m elf_i386 --build-id=none -T link.ld boot.o secondary.o kernel.o kernel_c.o pit.o memory.o cmemory.o pic8259.o cpuid.o floppy_driver.o rtc.o ata.o -o boot.elf
+	clang -target i386 -nostdlib -ffreestanding -c user_interface.cpp -o user_interface.o
+	ld -m elf_i386 --build-id=none -T link.ld boot.o secondary.o kernel.o kernel_c.o interrupts.o pit.o memory.o cmemory.o pic8259.o cpuid.o floppy_driver.o rtc.o ata.o user_interface.o -o boot.elf
 	objcopy -O binary boot.elf boot.bin
 	qemu-img convert -f raw boot.bin -O qcow2 boot.bin boot.qcow2
 	@ls -l | grep "boot.bin"
@@ -13,10 +14,11 @@ boot-gcc: assemble
 	objcopy -O binary boot.elf boot.bin
 	qemu-img convert -f raw boot.bin -O qcow2 boot.bin boot.qcow2
 	
-assemble: boot.asm secondary.asm kernel.asm pit.asm memory.asm pic8259.asm floppy_driver.asm rtc.asm ata.asm
+assemble: boot.asm secondary.asm kernel.asm pit.asm memory.asm pic8259.asm floppy_driver.asm rtc.asm ata.asm interrupts.asm
 	$(ASSEMBLER) -f elf32 boot.asm -o boot.o
 	$(ASSEMBLER) -f elf32 secondary.asm -o secondary.o
 	$(ASSEMBLER) -f elf32 kernel.asm -o kernel.o
+	$(ASSEMBLER) -f elf32 interrupts.asm -o interrupts.o
 	$(ASSEMBLER) -f elf32 pic8259.asm -o pic8259.o
 	$(ASSEMBLER) -f elf32 pit.asm -o pit.o
 	$(ASSEMBLER) -f elf32 memory.asm -o memory.o
@@ -30,7 +32,7 @@ run:
 	qemu-system-i386 -fda boot.qcow2 -hda /mnt/d/Virtual\ Machines/Maryland/Maryland.vmdk -boot order=a -cpu pentium3,sse=on
 # -D qemu_i386.log -d cpu ; we want to turn logging on but this is too much info.  
 run64:
-	qemu-system-x86_64 -fda boot.qcow2 -cpu Nehalem,sse2=on
+	qemu-system-x86_64 -fda boot.qcow2 -hda /mnt/d/Virtual\ Machines/Maryland/Maryland.vmdk -cpu Nehalem,sse2=on
 # -cpu Nehalem
 boot-image: assemble
 	gcc -m32 -fno-pic --freestanding -fno-asynchronous-unwind-tables -c kernel.c -o kernel_c.o

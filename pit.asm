@@ -25,9 +25,34 @@ extern read_pit
 extern configure_pit
 extern pit_interrupt_irq0
 extern print_hex_word
+extern print_hex_dword
 extern pit_interrupt_table_entry
 
+extern set_interrupt_callback
+
 section .text
+
+pit_interrupt_irq0:
+	push eax
+	push edx
+	push esi
+	
+	inc dword [current_tick]
+	mov dx, 0x1840
+	push ecx
+	mov ecx, [current_tick]
+	call print_hex_dword
+	pop ecx
+	
+	; end of interrupt
+	mov al, 0x20
+	out 0x20, al
+
+	pop esi
+	pop edx	
+	pop eax
+	
+	iretd
 
 configure_pit:
 	mov dx, 0x43
@@ -45,6 +70,10 @@ configure_pit:
 	mov al, 0
 	out dx, al
 	out dx, al
+	
+	mov ecx, 0x20				; set ecx to 0 because this is the 0th PIC interrupt
+	mov edx, pit_interrupt_irq0
+	call set_interrupt_callback
 	
 	sti		; as long as we mask the pit IRQ, this doesn't blow everything up.  
 	ret

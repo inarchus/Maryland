@@ -76,6 +76,7 @@ rtc_enable:
 
 
 rtc_get_tick:
+	;; returns the location of the low dword of the tick, but the next dword is the high word too, so this can be used for both purposes.  
 	mov eax, rtc_current_tick_low
 	ret
 	

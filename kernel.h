@@ -47,4 +47,6 @@ extern void ata_identify_drives();
 extern void clear_screen();
 extern void display_ascii_characters();
 
+extern void __fastcall print_decimal(dword number, dword position);
+
 #endif 

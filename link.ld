@@ -24,7 +24,7 @@ SECTIONS
 		pic8259.o (.text);
 		pit.o (.text)
 		memory.o (.text);
-		cmemory.o (.text);
+		memory_c.o (.text);
 		cpuid.o (.text);
 		rtc.o (.text)
 		ata.o (.text);
@@ -36,7 +36,7 @@ SECTIONS
 		pic8259.o (.data);
 		pit.o (.data)
 		memory.o (.data);
-		cmemory.o (.data);
+		memory_c.o (.data);
 		cpuid.o (.data);
 		rtc.o (.data);
 		ata.o (.data);
@@ -49,7 +49,7 @@ SECTIONS
 	.bss1 : ALIGN(0x180000) {
 		kernel.o (.bss);
 		memory.o (.bss);
-		cmemory.o (.bss);
+		memory_c.o (.bss);
 		pit.o (.bss)
 		pic8259.o (.bss);
 		rtc.o (.bss);

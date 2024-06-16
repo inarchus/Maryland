@@ -19,13 +19,14 @@
 [bits 32]
 
 extern empty_string
-extern kernel_loader_entry
+extern kernel_entry
 extern cgetline
 extern cprintline
 extern cstrings_equal
 extern hex_dump
 extern print_string
 extern getchar_pressed
+extern print_decimal
 
 extern clear_screen
 
@@ -73,7 +74,15 @@ extern configure_interrupt_descriptor_table
 extern set_interrupt_callback
 
 section .text
-kernel_loader_entry:
+kernel_entry:
+	mov esp, 0x090000
+	mov ax, 0x10
+	mov es, ax
+	mov ds, ax
+	mov fs, ax
+	mov gs, ax
+	mov ss, ax
+
 	call clear_screen
 	
 	xor dx, dx
@@ -919,10 +928,6 @@ display_stack_values:
 	ret
 
 ;void __fastcall print_hex_word(unsigned short word, unsigned int position)
-;{
-;	print_hex_byte((unsigned char)(word >> 8) & 0xff, position);
-;	print_hex_byte((unsigned char)word & 0xff, position + 2);
-;}
 print_hex_dword:
 	push edx
 	push ecx
@@ -935,10 +940,6 @@ print_hex_dword:
 	ret	
 
 ;void __fastcall print_hex_dword(unsigned int dword, unsigned int position)
-;{
-;	print_hex_word((unsigned short) ((dword >> 16) & 0xffff), position);
-;	print_hex_word((unsigned short) (dword & 0xffff), position + 4);
-;}
 print_hex_word:
 	push edx
 	push ecx
@@ -950,13 +951,75 @@ print_hex_word:
 	pop edx	
 	ret
 
-
+;void __fastcall print_hex_byte(byte dword, dword position)
 print_hex_byte:
 	push eax
 	movzx eax, cl
 	call display_hex_byte
 	pop eax
 	ret
+
+
+print_decimal:
+	; ecx contains the data, dx contains the position, eax will contain the format in ah (should we just write this in C?) my brain is having trouble for no reason
+	push ebp
+	mov ebp, esp
+	sub esp, 16
+	pushad	; let's cheat a little and just push everything	
+
+	mov ah, 0x0f			; for now... just for testing
+
+	mov [ebp - 16], ah		; save the format
+	mov [ebp - 14], dx		; save the position
+	lea edi, [ebp - 12]
+	
+	xor ebx, ebx
+	mov bl, 10				; set the divisor to 10, because it's decimal
+	
+	mov eax, ecx 			; move the number to eax
+	xor ecx, ecx
+	
+	test eax, eax 
+	jnz bypass_zero_value
+	mov ah, [ebp - 16]		; restore the format
+	mov dx, [ebp - 14]
+	mov al, '0'				; ascii for zero to add the offset
+	call printcharf
+	
+	jmp print_decimal_exit	; exit from the function, we have printed a zero.  
+	
+	bypass_zero_value:
+	
+	count_digits_loop:
+		xor edx, edx	; zero out edx for the next division
+		div ebx
+		mov [edi], edx
+		inc edi
+		inc ecx
+		test eax, eax
+	jnz count_digits_loop
+
+	dec edi		; move back by one
+	mov dx, [ebp - 14]
+	mov ah, [ebp - 16]	; restore the format
+	
+	print_dec_loop:
+		mov al, [edi]
+		add al, '0'		; ascii for zero to add the offset
+		call printcharf
+		dec edi
+		inc dx
+		dec cl
+		test cl, cl
+	jnz print_dec_loop
+	
+	print_decimal_exit:
+	
+	popad ; pop everything at the end
+	add esp, 16
+	leave
+	ret
+
 
 display_hex_byte:
 	; al will have the byte

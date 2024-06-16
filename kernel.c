@@ -77,6 +77,19 @@ void main_shell(char * in_string)
 		{
 			display_ascii_characters();			
 		}
+		else if(cstrings_equal(in_string, "test decimal conversion"))
+		{
+			print_decimal(45915, 0x0200);
+			print_decimal(23, 0x0300);
+			print_decimal(7788125, 0x0400);
+			print_decimal(0, 0x0500);
+			print_decimal(4294967295, 0x0600);
+		}
+		else if(cstrings_equal(in_string, "divide by zero"))
+		{
+			int x = 5, y = 0;
+			print_decimal(x/y, 0x0100);
+		}
 		else if(cstrings_equal(in_string, "rtc toggle"))
 		{
 			rtc_toggle_display();

@@ -15,6 +15,9 @@
 ;			dw high word of pit_interrupt_irq0							; high word of the address of the interrupt handler.  
 
 
+extern kernel_entry
+extern getchar_pressed
+
 extern printstrf
 extern print_hex_byte
 extern print_hex_word
@@ -26,12 +29,26 @@ extern set_interrupt_callback
 section .text
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; division_by_zero_fault0																		  ;;;; 	
+;;;; 	This interrupt callback is called when a division by zero occurs, it will attempt to restart  ;;;; 	
+;;;;		the kernel from scratch, doesn't really recover from where we are.						  ;;;; 	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+division_by_zero_fault0:
+	mov al, 0x04
+	xor dx, dx
+	mov esi, division_by_zero
+	call printstrf					; display an error string
+	call getchar_pressed			; let the user hit a key before proceeding
+	mov dword [esp], kernel_entry	; attempt to recover by jumping back to the entry point of the kernel
+	iretd
+	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; generic_fault																					  ;;;; 	
 ;;;; 	This interrupt callback is called when an interrupt for the 0x0 - 0x1f interrupts are called  ;;;; 	
 ;;;;		These interrupts are reserved by the processor for faults								  ;;;; 	
-;;;;																 								  ;;;; 	
+;;;;						https://wiki.osdev.org/Exceptions		 								  ;;;; 	
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-generic_fault:
+generic_exception:
 	iretd
 	
 
@@ -105,7 +122,7 @@ configure_interrupt_descriptor_table:
 	mov ax, [idt_code_segment]	; set to the default code segment
 	
 	mov ecx, 256		; configure processor interrupts
-	mov edx, generic_fault
+	mov edx, generic_exception
 	define_fault_loop:
 		cmp ecx, 224
 		ja skip_pic_user_int
@@ -137,8 +154,12 @@ configure_interrupt_descriptor_table:
 	jnz define_fault_loop
 	
 	lidt [idt_desc_struct]				; load the struct describing the table
-	
 	sti
+	
+	xor ecx, ecx						; interrupt 0 = division by zero
+	mov edx, division_by_zero_fault0
+	call set_interrupt_callback
+	
 	ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -175,6 +196,7 @@ section .data
 	idt_default_flags		db		1_00_0_1110b
 	idt_ring3_flags			db		0_11_0_0000b
 	cascade_str db "Cascade Received", 0
+	division_by_zero 		db		"A division by zero has occurred.", 0
 
 	idt_desc_struct:				; this is a structure which describes the descriptor table
 		dw 0x07ff					; 256 descriptors * 8 bytes = 2048 = 0x0800

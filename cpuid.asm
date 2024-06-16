@@ -8,16 +8,46 @@
 
 extern printstrf
 extern display_cpuid
+;extern print_dec_byte
+;extern print_dec_word
 
 section .text
 
 
 display_cpuid:
+	push eax
+	push ebx
+	push ecx
+	push edx 
+	
+	xor eax, eax
+	cpuid 
+	push eax
+	mov edi, cpu_vendor_string
+	
+	mov dword [edi], ebx
+	add edi, 4
+	mov dword [edi], edx
+	add edi, 4
+	mov dword [edi], ecx
+	add edi, 4
+	mov byte [edi], 0		; null terminate
+	
+	mov al, 0x0f
+	mov dx, 0x0100
+	mov esi, cpu_vendor_string
+	call printstrf
+	pop eax
+	
+	;cpu_family_id
+	;cpu_model_id			resb 1
+	;cpu_stepping_id			resb 1
+	;cpu_processor_type		resb 1
+	
 	
 	mov eax, 1
 	cpuid 
 
-	push ebx
 	push ecx
 	
 	mov ebx, edx
@@ -31,7 +61,10 @@ display_cpuid:
 	mov edx, 0x0400
 	call display_cpuid_loop_auxiliary
 	
+	pop edx
+	pop ecx
 	pop ebx
+	pop eax 
 	
 	ret
 	
@@ -121,3 +154,11 @@ section .data
     CPUID_FEAT_EDX_TM           db 'TM  ', 0
     CPUID_FEAT_EDX_IA64         db 'IA64', 0
     CPUID_FEAT_EDX_PBE          db 'PBE ', 0
+
+
+section .bss
+	cpu_vendor_string		resb 20
+	cpu_family_id			resw 1
+	cpu_model_id			resb 1
+	cpu_stepping_id			resb 1
+	cpu_processor_type		resb 1

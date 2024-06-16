@@ -11,6 +11,7 @@
 [bits 16]
 [segment 0x8000]
 
+extern kernel_entry
 extern kernel_loader_entry
 extern single_scan_code_map
 extern translate_scancode
@@ -1144,18 +1145,6 @@ write_string_to_screen:
 	add sp, 4
 	pop bp
 	ret
-
-[bits 32]
-kernel_entry:
-	mov esp, 0x090000
-	mov ax, 0x10
-	mov es, ax
-	mov ds, ax
-	mov fs, ax
-	mov gs, ax
-	mov ss, ax
-
-	jmp kernel_loader_entry
 
 section .data
 	reading_str db "reading", 0

@@ -82,18 +82,6 @@ display_pic_registers:
 	
 	ret
 	
-
-; what the hell is this anyway?
-; void __fastcall pic_end_of_interrupt(byte irq)
-pic_end_of_interrupt:
-	cmp cl, 8
-	jb pic_end_of_interrupt_skip_slave
-	;out PIC_SLAVE_CMD, 0x20	; port 0xa0, EOI = 0x20
-	pic_end_of_interrupt_skip_slave:
-	;out PIC_MASTER_CMD, 0x20	; port 0x20, EOI = 0x20
-	ret
-
-
 section .data
 
 section .bss

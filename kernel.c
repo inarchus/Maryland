@@ -1,7 +1,6 @@
 /*
 	Next objective is to have a split function.
 */
-
 #include "kernel.h"
 
 enum {FALSE = 0, TRUE = 1};
@@ -62,7 +61,7 @@ void main_shell(char * in_string)
 		}
 		else if(cstrings_equal(in_string, "ata identify drives"))
 		{
-			 ata_identify_drives();
+			ata_identify_drives();
 		}
 		else if(cstrings_equal(in_string, "cpuid"))
 		{
@@ -76,6 +75,10 @@ void main_shell(char * in_string)
 		else if(cstrings_equal(in_string, "display ascii"))
 		{
 			display_ascii_characters();			
+		}
+		else if(cstrings_equal(in_string, "ata get status"))
+		{
+			ata_display_status();
 		}
 		else if(cstrings_equal(in_string, "test decimal conversion"))
 		{

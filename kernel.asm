@@ -30,6 +30,8 @@ extern print_decimal
 
 extern clear_screen
 
+extern extended_code_str
+
 extern single_scan_code_map
 extern getchar_pressed
 extern string_length
@@ -140,12 +142,17 @@ enable_sse:
 	mov cr4, eax
 	
 	ldmxcsr [mxcsr_reg_value] ; somehow this instruction doesn't explode, but the problem is that it also doesn't seem to work entirely.  
-
+	
+	; we're testing which instructions work here, this is not actually doing anything beyond figuring out which instructions generate #UD or not.
 	; these instructions do work however, giving us about 8 additional 32 bit registers or 16 if we're creative.  
-	movd mm0, eax		; seems to work, VMWare seems to have problems with the xmm registers even after this is enabled... 
+	movd mm0, eax
 	; pinsrd xmm0, eax, 2, would be beautiful to have essentially unlimited scratch space...
-	; pinsrw xmm0, ax, 2 ; this works, but we have to be careful because pinsrd doesn't, so sse2 is not enabled.  
-
+	; this works but only if you use pinsrw and it will take the low word of eax and put it in position 2 from 0-7.  Why doesn't it take ax? who knows...
+	mov eax, 173829
+	pinsrw xmm3, eax, 2 ; this works, but we have to be careful because pinsrd doesn't, so sse2 is not enabled.  
+	movaps xmm0, xmm1
+	pextrw eax, xmm3, 2
+		
 	ret
 	
 

@@ -1,19 +1,25 @@
 ASSEMBLER = nasm
 ASM_FLAGS = elf32
-CLANG_FLAGS = -target i386 -nostdlib -ffreestanding
+CLANG_FLAGS = -target i386 -nostdlib -ffreestanding 
+# -Wno-builtin-declaration-mismatch
 
 ASSEMBLY_OBJECTS = boot.o secondary.o kernel.o pit.o pic8259.o interrupts.o memory.o floppy_driver.o rtc.o ata.o cpuid.o
 CLANG_OBJECTS = user_interface.o kernel_c.o memory_c.o
 
-boot: assemble memory.c kernel.c user_interface.cpp user_interface.h
-	clang $(CLANG_FLAGS) -c kernel.c -o kernel_c.o
-	clang $(CLANG_FLAGS) -c memory.c -o memory_c.o
-	clang $(CLANG_FLAGS) -c user_interface.cpp -o user_interface.o
+boot: assemble user_interface.o memory_c.o kernel_c.o
 	ld -m elf_i386 --build-id=none -T link.ld $(ASSEMBLY_OBJECTS) $(CLANG_OBJECTS) -o boot.elf
 	objcopy -O binary boot.elf boot.bin
 	qemu-img convert -f raw boot.bin -O qcow2 boot.bin boot.qcow2
 	@stat boot.bin | grep "Size:"
 
+kernel_c.o: kernel.c kernel.h
+# cc $(CLANG_FLAGS) -c kernel.c -o kernel_c.o
+	clang $(CLANG_FLAGS) -c kernel.c -o kernel_c.o
+memory_c.o: memory.c
+# cc $(CLANG_FLAGS) -c memory.c -o memory_c.o
+	clang $(CLANG_FLAGS) -c memory.c -o memory_c.o
+user_interface.o: user_interface.cpp user_interface.h
+	clang $(CLANG_FLAGS) -c user_interface.cpp -o user_interface.o
 assemble: $(ASSEMBLY_OBJECTS) 
 	$(ASSEMBLER) -f $(ASM_FLAGS) memory.asm -o memory.o
 floppy_driver.o: floppy_driver.asm
@@ -46,7 +52,7 @@ run64:
 # -cpu Nehalem
 # A vfd file is literally a raw file containing exactly 1440kb or 1,474,560 bytes.  The bin is also a raw file, but doesn't have that exact requirement.  
 # So we'll just extend the file to the proper length using "truncate."  VFD format files work in the Hyper-V for windows 10 and VirutalBox
-vfd: boot-clang
+vfd: boot
 	cp boot.bin floppy.vfd
 	truncate -s 1474560 floppy.vfd
 	cp floppy.vfd /mnt/d/Projects/

@@ -43,9 +43,11 @@ extern void fdisk_identify();
 extern void rtc_display_datetime(dword position);
 extern void rtc_toggle_display();
 
-extern void ata_identify_drives();
 extern void clear_screen();
 extern void display_ascii_characters();
+
+extern void ata_identify_drives();
+extern void ata_display_status();
 
 extern void __fastcall print_decimal(dword number, dword position);
 

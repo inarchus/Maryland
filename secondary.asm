@@ -12,11 +12,7 @@
 [segment 0x8000]
 
 extern kernel_entry
-extern kernel_loader_entry
-extern single_scan_code_map
-extern translate_scancode
 extern string_length
-extern pit_interrupt_irq0
 
 section .text
 

@@ -5,8 +5,10 @@ extern kernel_loader_entry
 
 section .text
 
-kernel_segment equ 0x700
-load_address equ 0x1000
+kernel_segment 		equ 0x0700
+load_address 		equ 0x1000
+secondary_offset	equ 0x3000
+temp_load_address 	equ 0x7e00
 
 start:
 	cli
@@ -41,7 +43,7 @@ start:
 	mov ax, 0x1300 				; output a string
 	int 0x10
 	
-	mov ax, 0x0210				; read from floppy ah = 2 - sixteen sectors al = 0x10
+	mov ax, 0x0211				; read from floppy ah = 2 - sixteen sectors al = 0x10
 	mov dx, 0x0000 				; dx high word is the head (side of the disk, 1 indexed, lies, 0 indexed), low word is the drive  (0 indexed = fda, 1 = fdb)
 	mov cx, 0x0003				; cx high word is the track, low word is the sector 
 								; this may be because sector 1 has the 0-stage bootloader code, sector 2 is empty, sector 3 has offset 0x8000+ so 3 to 18 are 16 sectors of data.  
@@ -51,15 +53,16 @@ start:
 	int 0x13	 				; read from floppy disk drive
 	
 	;; we're going to read a second track of sectors in order to make sure we have enough space since we're running a little low in protected mode.  
-	mov ax, 0x0212				; read from floppy ah = 2 - all eighteen sectors al = 0x12
-	mov dx, 0x0000 				; [dh = head, dl = fda]
-	mov cx, 0x0101				; [ch = track 1 (0 indexed), cl = sector 1 (1-indexed)]
-	
-	mov bx, 0x1000				;
-	mov es, bx					; set the destination segment to 1:0000 so that we can write there
-	xor bx, bx					;
+	push es
+	mov bx, 0x1000
+	mov es, bx
+	xor bx, bx
+	; super confusing...  
+	mov ax, 0x0211				; read from floppy ah = 2 - all eighteen sectors al = 0x12, starts at sector 2 for whatever reason
+	mov dx, 0x0100 				; [dh = head, dl = fda]		; read the back side of the disk, why? shouldn't it be stored on sector 2? or does it go t1h0 t1h1...? that's what it seems like
+	mov cx, 0x0002				; [ch = track 1 (0 indexed), cl = sector 1 (1-indexed)], why is it not at sector 1 ?
 	int 0x13	 				; read from floppy disk drive
-	mov es, bx					; reset the segment
+	pop es
 	
 	xor ax, ax
 	mov es, ax

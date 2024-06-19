@@ -1,9 +1,16 @@
 #ifndef __KERNEL_H__
 #define __KERNEL_H__
 
-typedef unsigned char 	byte;
-typedef unsigned short 	word;
-typedef unsigned int 	dword;
+typedef unsigned char 		byte;
+typedef unsigned short 		word;
+typedef unsigned int 		dword;
+typedef unsigned long long 	qword;	// must be long long otherwise it's just 4 again.  
+
+/*
+	This is the entry-point for "eshell" the eric-shell written in C++.  
+	Since we cannot include a class into C, we'll extern it as well.  
+*/
+extern dword eshell_entry(int rows, int cols);
 
 
 union FloppyDiskRead {
@@ -48,6 +55,9 @@ extern void display_ascii_characters();
 
 extern void ata_identify_drives();
 extern void ata_display_status();
+extern void __fastcall ata_write_sector_lba(dword controller_and_drive, dword num_sectors, qword lba_address, dword address);
+extern void __fastcall ata_read_sector_lba(dword controller_and_drive, dword num_sectors, qword lba_address, dword address);
+
 
 extern void __fastcall print_decimal(dword number, dword position);
 

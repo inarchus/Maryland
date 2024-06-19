@@ -137,15 +137,15 @@ ata_set_sectors:
 	cmp bl, ATA_CMD_READ_SECTORS
 	je bypass_set_high_sectors
 
-		lea esi, [ebp + 7]			; start with the high sector counts
+		lea esi, [ebp + 12]			; start with the high sector counts
 		call ata_set_sector_counts
 	
 	bypass_set_high_sectors:
 	mov dx, ATAR_PRI_SECTOR_COUNT
 	mov ax, di
 	out dx, al
-	
-	lea esi, [ebp + 4]				; finish with the low sector counts
+	; this next one is weird, we're starting at +9 rather than +8 because we load 3 bytes at a time, not 4.  
+	lea esi, [ebp + 9]				; finish with the low sector counts
 	call ata_set_sector_counts
 	ret
 
@@ -154,16 +154,37 @@ ata_write_sector_lba:
 	;; ecx is the controller and drive 	[cl = controller << 1 | drive]
 	;; edx contains number of sectors to write.  
 	;; on the stack we'll push a 64 bit long word of the LBA or CHS depending on the mode selected, top two bytes should be zero.  We will store it in mm0
-	;; pass as the third stack argument the address to write to.
+	;; pass as the second stack argument the address to write to. [32 bits this time]
 	;; the difference between LBA28 and LBA48 is or-ing with 0xa0 (for lba 28)
 	push ebp
 	mov ebp, esp
 	pushad
 	
-	mov edi, edx		; keep edx in edi so that we can modify edx for out instructions
+	push ecx
+	push edx
+
+	mov ecx, [ebp + 4]		; return address
+	mov edx, 0x0500
+	call print_hex_dword
 	
-	push ebp
-	mov ebp, esp
+	mov ecx, [ebp + 8]		
+	mov edx, 0x050c
+	call print_hex_dword
+	
+	
+	mov ecx, [ebp + 12]
+	mov edx, 0x0518
+	call print_hex_dword
+
+	mov ecx, [ebp + 16]
+	mov edx, 0x0522
+	call print_hex_dword
+
+	
+	pop edx
+	pop ecx
+		
+	mov edi, edx		; keep edx in edi so that we can modify edx for out instructions
 	
 	;;;;;;;;;;; currently non-functional until we get more data from the drive and figure out what mode we're in assuming LBA 48... ;;;;;;;;;;;;;;;;;;
 	and ecx, 0x00000003							; add a bit of safety to ensure that there's only the proper numbers used as offsets
@@ -186,7 +207,7 @@ ata_write_sector_lba:
 	out dx, al
 	
 	; read the data 
-	mov esi, [ebp + 12]				; set esi to the source of the data
+	mov esi, [ebp + 16]				; set esi to the source of the data
 	mov dx, ATAR_PRI_DATA0			; set data register
 	
 	mov cx, 256
@@ -219,10 +240,31 @@ ata_read_sector_lba:
 	mov ebp, esp
 	pushad
 	
-	mov edi, edx		; keep edx in edi so that we can modify edx for out instructions
+	push ecx
+	push edx
+
+	mov ecx, [ebp + 4]		; return address
+	mov edx, 0x0500
+	call print_hex_dword
 	
-	push ebp
-	mov ebp, esp
+	mov ecx, [ebp + 8]		
+	mov edx, 0x050c
+	call print_hex_dword
+	
+	
+	mov ecx, [ebp + 12]
+	mov edx, 0x0518
+	call print_hex_dword
+
+	mov ecx, [ebp + 16]
+	mov edx, 0x0522
+	call print_hex_dword
+
+	
+	pop edx
+	pop ecx
+	
+	mov edi, edx		; keep edx in edi so that we can modify edx for out instructions
 	
 	and ecx, 0x00000003							; add a bit of safety to ensure that there's only the proper numbers used as offsets
 	mov eax, [ata_drive_flags + 4 * ecx]		; must be modified when the controller is allowed to be non-zero
@@ -243,9 +285,16 @@ ata_read_sector_lba:
 	mov al, bl						; bl is the read command, either ATA_CMD_READ_SECTORS or ATA_CMD_READ_SECTORS_EXT
 	out dx, al
 	
+	; have to wait until the data is ready...
+	mov dx, ATAR_DCR1
+	.wait_until_drq:
+		in al, dx
+		test al, 0x08 ; 0000_1000b
+	jz .wait_until_drq	
+	
 	; read the data 
 	mov cx, 256
-	mov edi, [ebp + 12]				; set edi to the location where the data will be written
+	mov edi, [ebp + 16]				; set edi to the location where the data will be written
 	mov dx, ATAR_PRI_DATA0			; set data register
 	rep insw						; repeat 256 times
 	
@@ -267,11 +316,6 @@ ata_set_sector_counts:			; helper function to set the registers, call once for L
 	jnz ata_read_set_reg_loop
 	ret
 	
-ata_write_sector:
-
-	ret
-
-
 ata_identify_drives:
 	
 	mov dx, ATAR_PRI_DRV_HEAD

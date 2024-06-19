@@ -4,22 +4,25 @@ CLANG_FLAGS = -target i386 -nostdlib -ffreestanding
 # -Wno-builtin-declaration-mismatch
 
 ASSEMBLY_OBJECTS = boot.o secondary.o kernel.o pit.o pic8259.o interrupts.o memory.o floppy_driver.o rtc.o ata.o cpuid.o
-CLANG_OBJECTS = user_interface.o kernel_c.o memory_c.o
+CLANG_OBJECTS = user_interface.o kernel_c.o etui_object.o e_progress_bar.o memory_c.o
 
-boot: assemble user_interface.o memory_c.o kernel_c.o
+boot: assemble $(CLANG_OBJECTS)
 	ld -m elf_i386 --build-id=none -T link.ld $(ASSEMBLY_OBJECTS) $(CLANG_OBJECTS) -o boot.elf
 	objcopy -O binary boot.elf boot.bin
 	qemu-img convert -f raw boot.bin -O qcow2 boot.bin boot.qcow2
 	@stat boot.bin | grep "Size:"
 
-kernel_c.o: kernel.c kernel.h
-# cc $(CLANG_FLAGS) -c kernel.c -o kernel_c.o
-	clang $(CLANG_FLAGS) -c kernel.c -o kernel_c.o
-memory_c.o: memory.c
-# cc $(CLANG_FLAGS) -c memory.c -o memory_c.o
-	clang $(CLANG_FLAGS) -c memory.c -o memory_c.o
+etui_object.o: etui/ETUIObject.h etui/ETUIObject.cpp
+	clang $(CLANG_FLAGS) -c etui/ETUIObject.cpp -o etui_object.o
+e_progress_bar.o: etui/EProgressBar.cpp etui/EProgressBar.h
+	clang $(CLANG_FLAGS) -c etui/EProgressBar.cpp -o e_progress_bar.o
 user_interface.o: user_interface.cpp user_interface.h
 	clang $(CLANG_FLAGS) -c user_interface.cpp -o user_interface.o
+kernel_c.o: kernel.c kernel.h
+	clang $(CLANG_FLAGS) -c kernel.c -o kernel_c.o
+memory_c.o: memory.c
+	clang $(CLANG_FLAGS) -c memory.c -o memory_c.o
+
 assemble: $(ASSEMBLY_OBJECTS) 
 	$(ASSEMBLER) -f $(ASM_FLAGS) memory.asm -o memory.o
 floppy_driver.o: floppy_driver.asm

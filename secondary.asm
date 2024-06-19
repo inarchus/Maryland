@@ -3,7 +3,7 @@
 ;;;;																																								;;;;
 ;;;;		This code is the secondary stage 16-bit bootloader which allows hexdumps, floppy reads, etc																;;;;
 ;;;;																																			Eric Hamilton		;;;;
-;;;;																																						  		;;;;
+;;;;				https://wiki.osdev.org/Disk_access_using_the_BIOS_(INT_13h)																				  		;;;;
 ;;;;																																						  		;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	

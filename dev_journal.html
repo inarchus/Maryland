@@ -1,0 +1,48 @@
+<html>
+
+<title> Development Journal </title>
+<style>
+body {
+	font-family: "Verdana";	
+}
+section {
+		width: 50%; 
+		margin: 0 auto;
+	}
+h1 {text-align: center;
+	font-size: 3.0em;
+}
+h2 {text-align: center;
+	font-size: 1.5em;
+}
+
+</style>
+<body>
+<section>
+<h1> 18 June 2024 </h1>
+<p> Beginning of Journal: I want to write this so that I can recall my thoughts and steps along the way, given that this development is being done without any real knowledge of how to do any of it, figuring it out along the way.  I've been working on this for about a month, though Lisa's wedding got in the way and I had to take some time off from it. 
+<h2> Wrong Addressing for Segments </h2> 
+Today I faced a number of problems.  The first was that I couldn't count.  I was loading using boot.asm 0x8000-0x9fff and then loading to 0x10000 instead of 0xa000. That's now fixed.  I'm also totally confused currently about how sector-track-heads work on the floppy because for the second read from (side) head=1 track=0 I have to start at sector 4 instead of 0.  Maybe I need to recalibrate the heads to zero or something but honestly I don't have a clue yet.  When I addressed incorrectly the symptom was that variables in the .data segment basically were all 0's.  To me this indicated that the variables were not at their correct addresses since all memory is zero.  Many hexdumps and searches were required and it was frustrating because it ate most of my progress for the day. 
+<h2> ATA Driver </h2>
+I also tested out the read and write from ATA today for the first time, which initially wrote to some bizarre address but fixing the way that the parameters are passed and checking to make sure the offsets were correct fixed that.  I have successfully written and read from address 0x0 on the drive.  We're using PIO (Polling I/O) rather than the DMA currently, but that doesn't really matter yet.  I added a read from the alternative status register of the first controller until the DRQ bit is set, which means that we're ready to read data.  It wasn't specified in the 48 bit PIO instructions which I followed pretty religiously, but it makes sense that it would need to be set, and looking deeply at their sample driver, which I didn't really use otherwise, they also do the same thing.  Reading before the DRQ bit is set produces 0's, maybe even flips an ERR bit but I wouldn't know since my code currently isn't safe enough to check.  
+
+<h2> Next Steps </h2>
+<p> In terms of next steps currently we have a few big jobs to do: 
+<ul>
+<li> Get dynamic memory working probably in C++ by implementing new, new[] and delete.  We need this to do the next two tasks. I'm probably going to implement a very terrible version which allocates and then never really deletes anything, just so that we can test out some of the other things we need to do.  Eventually we'll run out of ram, I suppose but really we don't run this enough to matter, yet. 
+<li> Implement a string class to handle strings of all kinds. Strings will require dynamic memory allocation.  This isn't glorious but I need to for the text boxes and edit boxes in the next item. Should be a few minutes of boring work really.  I should probably also implement a vector/array class for the same reason. 
+<li> Once those things are done, we should implement the TUI = text user interface classes.  I want to build an interface with frames/windows, buttons, text boxes, edit boxes, and other controls in order to fix what we're coming up against which is almost too much to display at a given time.  
+<li> Eventually I need to go back and fix the floppy driver which casuses reboots/faults on VMWare and VirtualBox, meaning something that is probably emulated there is more detailed than the QEMU emulation.  
+<li> Add more support for faults and attempt to debug them without having the emulated computer reboot. #GP and #UD are probably the next targets.  
+<li> Once the TUI is up and running, create tabs for CPUID, Floppy Drives, Hard Drives,  Controllers, and add a tab for data entry into ram so that we can then save it to the hard drive or move it, perform memory operations, etc.  
+<li> Once all of that is done, begin implementing the FAT32 format so that we can actually use the hard drive as a hard drive. FAT32 is a decent format in the sense that it has a max of 4gb files and currently this OS will have a drive of 40 MB.  We can implement ext4, ntfs, btrfs all when anything else actually works.  
+<li> See if we can get VGA support actually working so that we can output to the screen by pixel and then really begin making a GUI, but this is far far future work.  
+<li> Also for the far future, getting PCI support would be nice.  
+<li> In terms of the TUI one feature I want to support is a kind of virtual keyword without the keyword meaning if we have ETUIObject *'s we can call redraw and it will know which method is correct.  Some work on this today but no success yet.  
+</ul>
+</section>
+<h1> 19 June 2024 </h1>
+It's a new day of OS Development... 
+</body>
+
+</html>

@@ -98,6 +98,27 @@ void main_shell(char * in_string)
 			rtc_toggle_display();
 			clear_screen();
 		}
+		else if(cstrings_equal(in_string, "esh"))
+		{
+			eshell_entry(25, 80);
+		}
+		else if(cstrings_equal(in_string, "ata test write"))
+		{
+			for(dword i = 0x00300000; i < 0x00300200; i++)
+			{
+				*((byte *)i) = i % 256;
+			}
+			// this explodes in a way that is unimaginable... 
+			ata_write_sector_lba(0, 1, 0x0, 0x00300000);
+		}
+		else if(cstrings_equal(in_string, "ata test read"))
+		{
+			ata_read_sector_lba(0, 1, 0x0, 0x00310000);
+		}
+		else if(cstrings_equal(in_string, "get size of long"))
+		{
+			print_hex_byte(sizeof(long long), 0x0300);
+		}
 		else
 		{
 			cprintline(in_string, 0);

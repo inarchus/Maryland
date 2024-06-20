@@ -3,14 +3,18 @@ ASM_FLAGS = elf32
 CLANG_FLAGS = -target i386 -nostdlib -ffreestanding 
 # -Wno-builtin-declaration-mismatch
 
-ASSEMBLY_OBJECTS = boot.o secondary.o kernel.o pit.o pic8259.o interrupts.o memory.o floppy_driver.o rtc.o ata.o cpuid.o
-CLANG_OBJECTS = user_interface.o kernel_c.o etui_object.o e_progress_bar.o memory_c.o
+export ASSEMBLY_OBJECTS_REAL_MODE = boot.o secondary.o 
+export ASSEMBLY_OBJECTS_PROTECTED = kernel.o pit.o pic8259.o interrupts.o memory.o floppy_driver.o rtc.o ata.o cpuid.o
+export CLANG_OBJECTS = user_interface.o kernel_c.o etui_object.o e_progress_bar.o memory_c.o string.o
 
-boot: assemble $(CLANG_OBJECTS)
-	ld -m elf_i386 --build-id=none -T link.ld $(ASSEMBLY_OBJECTS) $(CLANG_OBJECTS) -o boot.elf
+boot: assemble $(CLANG_OBJECTS) link-file
+	ld -m elf_i386 --build-id=none -T link.ld $(ASSEMBLY_OBJECTS_REAL_MODE) $(ASSEMBLY_OBJECTS_PROTECTED) $(CLANG_OBJECTS) -o boot.elf
 	objcopy -O binary boot.elf boot.bin
 	qemu-img convert -f raw boot.bin -O qcow2 boot.bin boot.qcow2
 	@stat boot.bin | grep "Size:"
+
+link-file: makefile
+	python generate_link_file.py
 
 etui_object.o: etui/ETUIObject.h etui/ETUIObject.cpp
 	clang $(CLANG_FLAGS) -c etui/ETUIObject.cpp -o etui_object.o
@@ -20,10 +24,12 @@ user_interface.o: user_interface.cpp user_interface.h
 	clang $(CLANG_FLAGS) -c user_interface.cpp -o user_interface.o
 kernel_c.o: kernel.c kernel.h
 	clang $(CLANG_FLAGS) -c kernel.c -o kernel_c.o
-memory_c.o: memory.c
-	clang $(CLANG_FLAGS) -c memory.c -o memory_c.o
+memory_c.o: memory.cpp memory.h
+	clang $(CLANG_FLAGS) -c memory.cpp -o memory_c.o
+string.o: string.h string.cpp
+	clang $(CLANG_FLAGS) -c string.cpp -o string.o
 
-assemble: $(ASSEMBLY_OBJECTS) 
+assemble: $(ASSEMBLY_OBJECTS_REAL_MODE) $(ASSEMBLY_OBJECTS_PROTECTED) 
 	$(ASSEMBLER) -f $(ASM_FLAGS) memory.asm -o memory.o
 floppy_driver.o: floppy_driver.asm
 	$(ASSEMBLER) -f $(ASM_FLAGS) floppy_driver.asm -o floppy_driver.o

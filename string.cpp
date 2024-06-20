@@ -1,32 +1,6 @@
 #include "string.h"
 #include "memory.h"
 
-/*
-class String
-{
-	public:
-		String();
-		String(const String & copy_string);
-		
-		String & concatenate(const String & rhs);
-		bool equals(const String & rhs);
-		bool startswith(const String & rhs);
-		String & upper();
-		String & lower();
-		// array<String> & split(); needs array to be implemented
-		// 
-		inline unsigned int length() const;
-		String & operator = (const String & rhs);
-		bool operator == (const String & rhs) const;
-		String & operator + (const String & rhs);
-		String & operator += (const String & rhs);
-		
-		~String();
-	private:
-		unsigned int length;
-		char * p_char_string;
-};
-*/
 
 String::String()
 	: n_length(0), p_char_string(nullptr)
@@ -51,6 +25,22 @@ String::~String()
 
 String & String::concatenate(const String & rhs)
 {
+	char * new_string = new char[n_length + rhs.n_length + 1];
+	
+	for(unsigned int i = 0; i < n_length; i++)
+	{
+		new_string[i] = p_char_string[i];
+	}
+	for(unsigned int j = n_length; i < n_length + rhs_length + 1; i++)
+	{
+		new_string[i] = rhs.p_char_string[i];
+	}
+	new_string[n_length + rhs.n_length] = 0; // null terminate
+	
+	delete p_char_string;
+	p_char_string = new_string;
+	n_length += rhs.n_length;
+	
 	return *this;
 }
 bool String::equals(const String & rhs) const
@@ -67,16 +57,39 @@ bool String::equals(const String & rhs) const
 }
 bool String::startswith(const String & rhs) const
 {
+	if(n_length < rhs.n_length)
+		return false;
 	
+	for(unsigned int i = 0; i < rhs.n_length; i++)
+	{
+		if (rhs.p_char_string[i] != p_char_string[i])
+			return false;
+	}
 	return true;
 }
 String & String::upper()
 {
-	return *this;
+	String upper_string(*this);
+	for(unsigned int i = 0; i < upper_string.n_length; i++)
+	{
+		if ('a' <= upper_string.p_char_string[i] && upper_string.p_char_string[i] <= 'z')
+		{
+			upper_string.p_char_string[i] -= 0x20;
+		}
+	}
+	return upper_string;
 }
 String & String::lower()
 {
-	return *this;
+	String lower_string(*this);
+	for(unsigned int i = 0; i < lower_string.n_length; i++)
+	{
+		if ('A' <= lower_string.p_char_string[i] && lower_string.p_char_string[i] <= 'Z')
+		{
+			lower_string.p_char_string[i] += 0x20;
+		}
+	}	
+	return lower_string;
 }
 
 inline unsigned int String::length() const
@@ -86,6 +99,10 @@ inline unsigned int String::length() const
 
 String & String::operator = (const String & rhs)
 {
+	if (this != &rhs)
+	{
+		char_pointer_copy(rhs.p_char_string);
+	}
 	return *this;
 }
 bool String::operator == (const String & rhs) const
@@ -104,6 +121,8 @@ String & String::operator += (const String & rhs)
 
 void String::char_pointer_copy(const char * const p_chars)
 {
+	delete p_char_string;
+	
 	n_length = calculate_length(p_chars);
 	p_char_string = new char[n_length + 1];
 	for(unsigned int i = 0; i < n_length; i++)

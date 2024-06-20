@@ -43,6 +43,34 @@ division_by_zero_fault0:
 	iretd
 	
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; general_protection_fault																		  
+;;;; 	This interrupt callback is called whenever a GP fault is detected, it probably cannot currently
+;;;;		do any recovery and will result in a reboot after a character is pressed.  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+general_protection_fault:
+	mov al, 0x04
+	xor dx, dx
+	mov esi, gp_fault_string
+	call printstrf					; display an error string
+	call getchar_pressed			; let the user hit a key before proceeding
+	mov dword [esp], kernel_entry	; attempt to recover by jumping back to the entry point of the kernel
+	iretd
+	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; 	invalid_opcode_exception
+;;;; 		#UD = invalid opcode
+;;;;		No recovery is currently attempted but the exception is now written into the idt
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+invalid_opcode_exception:
+	mov al, 0x04
+	xor dx, dx
+	mov esi, unknown_instruction_str
+	call printstrf					; display an error string
+	call getchar_pressed			; let the user hit a key before proceeding
+	mov dword [esp], kernel_entry	; attempt to recover by jumping back to the entry point of the kernel
+	iretd
+	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; generic_fault																					  ;;;; 	
 ;;;; 	This interrupt callback is called when an interrupt for the 0x0 - 0x1f interrupts are called  ;;;; 	
 ;;;;		These interrupts are reserved by the processor for faults								  ;;;; 	
@@ -156,8 +184,18 @@ configure_interrupt_descriptor_table:
 	lidt [idt_desc_struct]				; load the struct describing the table
 	sti
 	
+	;; setting interrupt callbacks manually, once we implement enough of them we'll do it in a loop.  
+	
 	xor ecx, ecx						; interrupt 0 = division by zero
 	mov edx, division_by_zero_fault0
+	call set_interrupt_callback
+	
+	mov ecx, 0x6
+	mov edx, invalid_opcode_exception
+	call set_interrupt_callback
+
+	mov ecx, 0xD
+	mov edx, general_protection_fault
 	call set_interrupt_callback
 	
 	ret
@@ -197,6 +235,9 @@ section .data
 	idt_ring3_flags			db		0_11_0_0000b
 	cascade_str db "Cascade Received", 0
 	division_by_zero 		db		"A division by zero has occurred.", 0
+	gp_fault_string			db		"A general protection fault has occurred.", 0
+	unknown_instruction_str db		"An unknown instruction was executed.", 0
+
 
 	idt_desc_struct:				; this is a structure which describes the descriptor table
 		dw 0x07ff					; 256 descriptors * 8 bytes = 2048 = 0x0800

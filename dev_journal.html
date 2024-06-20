@@ -41,8 +41,17 @@ I also tested out the read and write from ATA today for the first time, which in
 <li> In terms of the TUI one feature I want to support is a kind of virtual keyword without the keyword meaning if we have ETUIObject *'s we can call redraw and it will know which method is correct.  Some work on this today but no success yet.  
 </ul>
 </section>
+
+<section>
 <h1> 19 June 2024 </h1>
-It's a new day of OS Development... 
+<p> I learned two things today.  The first is that if you don't include something in the link.ld file, then you will end up with the sections of .data potentially going anywhere including into the boot.data section which means that the amount of data will quickly exceed the MBR.  We should write an auto-generation script that will make a link.ld file appropriately.  
+<p> I also learned that on a different computer, the sector you need is also different in boot.asm for the secondary load.  It was 3 instead of 4, I have no explanation for this either.  
+<p> Currently the OS cannot be compiled via the github without modification, I think we should probably make it so that it can be built out of the box, but that will take a bit more effort.  
+
+<h2> Link.ld Automation </h2>
+I've written a python script that generates link.ld, that was basically all the progress of the 19th. 
+
+</section>
 </body>
 
 </html>

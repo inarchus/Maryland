@@ -77,8 +77,8 @@ extern set_interrupt_callback
 
 section .text
 kernel_entry:
-	mov esp, 0x090000
-	mov ax, 0x10
+	mov esp, 0x0a0000		; set the stack up to 10 MB so that we have plenty of room
+	mov ax, 0x10			; 0x10 is the data segment
 	mov es, ax
 	mov ds, ax
 	mov fs, ax

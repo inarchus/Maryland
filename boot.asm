@@ -1,8 +1,6 @@
 global start
 [BITS 16]
 
-;extern kernel_loader_entry
-
 section .text
 
 kernel_segment 		equ 0x0700
@@ -47,7 +45,7 @@ start:
 	;; the problem here is that i kind of get 	head = 0 track = 0 sector = 3 and then 16 sectors after that.
 	;; but i don't get why we read from 		head = 1 track = 0 sector = 4 and then 18 sectors!?
 	
-	mov ax, 0x0210				; read from floppy ah = 2 - sixteen sectors al = 0x10
+	mov ax, 0x0222				; read from floppy ah = 2 - sixteen sectors al = 0x10
 	mov dx, 0x0000 				; dx high word is the head (side of the disk, 1 indexed, lies, 0 indexed), low word is the drive  (0 indexed = fda, 1 = fdb)
 	mov cx, 0x0003				; cx high word is the track, low word is the sector 
 								; this may be because sector 1 has the 0-stage bootloader code, sector 2 is empty (7e00-8000), sector 3 has offset 0x8000+ so 3 to 18 are 16 sectors of data.  
@@ -58,11 +56,12 @@ start:
 	
 	;; we're going to read a second track of sectors in order to make sure we have enough space since we're running a little low in protected mode.  
 	; super confusing...  we should try to do an LBA read rather than this CHS nonsense.  it's causing a huge number of problems for us.  
+	;; ok i think we've gained some understanding... I think that it alternates heads between tracks, so the next thing is at track 1.  Now... why the living shit did that work reading from sector 3?
 	mov ax, 0x0212				; read from floppy ah = 2 - all eighteen sectors al = 0x12, starts at sector 2 for whatever reason
 	mov dx, 0x0100 				; [dh = head, dl = fda]		; read the back side of the disk, why? shouldn't it be stored on sector 2? or does it go t1h0 t1h1...? that's what it seems like
 	mov cx, 0x0004				; [ch = track 1 (0 indexed), cl = sector 1 (1-indexed)], why is it not at sector 1 ?
 	mov bx, 0x3000				; 0x3000 + 0x7000 = 0xa000
-	int 0x13	 				; read from floppy disk drive
+	;int 0x13	 				; read from floppy disk drive
 	
 	xor ax, ax
 	mov es, ax
@@ -77,7 +76,8 @@ start:
 	int 0x16
 
 	jmp kernel_segment:load_address
-
+	
+section .data
 	out_string db "Bootloader Detected... Loading from Floppy Disk", 0
 	out_string_len equ $ - out_string
 	press_key db "Press any key to jump into the next segment. ", 0

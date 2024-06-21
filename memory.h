@@ -12,13 +12,19 @@
 */
 #ifndef __MEMORY_H__
 #define __MEMORY_H__
+namespace std { 
+
+	typedef typeof(sizeof(0)) size_t; // valid since C23
+
+}
 
 
+void * operator new (std::size_t size_in_bytes);
+void * operator new[] (std::size_t size_in_bytes);
 
-void * operator new (unsigned int size_in_bytes);
-void * operator new[] (unsigned int size_in_bytes);
 void operator delete(void * p_memory) noexcept;
 void operator delete [] (void * p_memory) noexcept;
+
 
 namespace Memory {
 	
@@ -51,9 +57,9 @@ typedef struct MemoryBlock {
 */
 //MemoryBlock origin;
 
-void * __attribute__((fastcall)) allocate(unsigned int size);
-void __attribute__((fastcall)) free(void * p_memory);
-void __attribute__((fastcall)) kill(void * p_memory);
+void * allocate(std::size_t size);
+void free(void * p_memory);
+void kill(void * p_memory);
 
 } //
 

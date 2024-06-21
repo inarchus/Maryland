@@ -13,18 +13,19 @@
 
 #include "memory.h"
 
-extern "C" void memcpy(void * source, void * destination, unsigned int length);
-extern "C" void memset(void * memory, unsigned int size, unsigned char value);
+
+extern "C" void memory_copy(void * source, void * destination, unsigned int length);
+extern "C" void memory_set(void * memory, unsigned int size, unsigned long value);
 
 void * p_dynamic_memory_start = (void *)0x400000;		// again, dumbest thing imaginable, we're hard coding the start of the dynamic segment [heap]
 void * p_dynamic_memory_current = (void *)0x400000;
 
-void * operator new (unsigned int size_in_bytes)
+void * operator new (std::size_t size_in_bytes)
 {
 	return Memory::allocate(size_in_bytes);
 }
 
-void * operator new[] (unsigned int size_in_bytes)
+void * operator new[] (std::size_t size_in_bytes)
 {
 	return Memory::allocate(size_in_bytes);
 }
@@ -42,7 +43,7 @@ void operator delete [] (void * p_memory) noexcept
 namespace Memory 
 {
 	
-void * __attribute__((fastcall)) allocate(unsigned int size)
+void * allocate(std::size_t size)
 {
 	// this needs to be rewritten entirely once we get around to actually caring about allocating memory and freeing it properly.  
 	// search through the blocks to find memory of a particular size in unallocated space.  
@@ -58,7 +59,7 @@ void * __attribute__((fastcall)) allocate(unsigned int size)
 	
 	CURRENTLY WE DO NOT FREE MEMORY
 */
-void __attribute__((fastcall)) free(void * p_memory)
+void  free(void * p_memory) 
 {
 	/*DynamicMemory * p_dynamic = (void * )(p_memory - sizeof(void *));
 	p_dynamic->p_record->flags &= ~0x01;
@@ -69,11 +70,11 @@ void __attribute__((fastcall)) free(void * p_memory)
 
 // dont' use this, it's going to break
 // CURRENTLY WE DO NOT FREE MEMORY
-void __attribute__((fastcall)) kill(void * p_memory)
+void kill(void * p_memory)
 {
 	DynamicMemory * p_dynamic = (DynamicMemory * )((char *)p_memory - sizeof(void *));
 	p_dynamic->p_record->flags &= ~0x01;
-	memset(p_memory, 0, p_dynamic->p_record->length);
+	memory_set(p_memory, 0, p_dynamic->p_record->length);
 }
 
 }

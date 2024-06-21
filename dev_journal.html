@@ -52,6 +52,24 @@ I also tested out the read and write from ATA today for the first time, which in
 I've written a python script that generates link.ld, that was basically all the progress of the 19th. 
 
 </section>
+
+<section>
+<h1> 20 June 2024 </h1>
+<p> Another day with very little progress.  My goal was to get the TUI operational so I've been slowly grinding away at coding it, with the knowledge that I need to get the redraw() method working in all of the classes descending from ETUIObject.  I need to reproduce a virtual method, unless perhaps I could just cheat and use the vtable.  Let's try that.  I got it to work, at least no errors.  I implemented an array class (vector equivalent) and a string class.  
+<p> Now I think it's time to implement the drawing of borders of the TUI objects, selecting which object needs to be used/inputted/outputted to via the console or mouse, probably with tabs or function keys.  After the borders are implemented we can implement the text display that way instead of sending dx = location we can simply output things to a specific text box.  
+<p> Maybe implement expanding/popup/drop down menus in the future.
+<p> Memory management currently involves allocating but no deallocation, which means that eventually we'll run out, so we can't be allocating new strings every 10 ms otherwise we may use up the available heap space pretty fast.  
+<p> __fastcall seems to really be fighting us in C++ rather than C, must figure that out.  Tried fastcall, __fastcall, __attribute__((fastcall)) all met with resistance.  I was reading an online spat about how __fastcall was actually not any faster than pushing to the stack, I'm a little bit dubious of that since passing arguments via registers has to be faster than using the stack which is ram, unless of course there's something I'm missing, or calls are so expensive that they mask the savings from the register passing.  That's separate from trying to get it to work in the first place.  
+<p> I think we should add some kind of check to ensure that the floppy load worked right.  Some kind of checksum should be sufficient.  
+<p> Soon we might have to write a bit of python to put the sectors onto the floppy correctly.  This is because we will be putting things in places that aren't determined by their sector on the drive and the offset from the 0x8000 start.  
+<p> We also have to think about what to do about the link.ld file.  It will be constantly updated and changed.  Maybe we can upload a sample version of it, with some explanation of what it's doing but then remove it from the actual git repository/add to .gitignore.  This is a small matter.
+<p> We also should think about maybe making this dev-journal officially an md format so that it can be read by the git repository.  
+</section>
+
+<section>
+<h1> 21 June 2024 </h1>
+
+</section>
 </body>
 
 </html>

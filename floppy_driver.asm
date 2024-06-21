@@ -191,11 +191,11 @@ fdisk_enable_dma:
 
 	mov dx, 0x05
 	mov al, 0xff
-    out dx, al		    ; count to 0x33ff (low byte)
+    out dx, al		    ; count to 0xff (low byte)		this sets us to read one sector at a time, which needs to be our current goal
 	
 	mov dx, 0x05
-	mov al, 0x23
-    out dx, al		    ; count to 0x33ff (high byte)
+	mov al, 0x01
+    out dx, al		    ; count to 0x01 (high byte)
     
 	mov dx, 0x81
 	xor al, al
@@ -354,7 +354,7 @@ fdisk_display_msr:
 
 
 fdisk_read_sector:
-	; 
+	; ecx = [controller=0 for now | drive | ch = head | cl = track] edx = [dh = sector_start | dl = n_sectors]
 
 	; rdi will contain the pointer to the destination 
 	; we'll have to have (disk: drive) (track: sector)
@@ -373,28 +373,17 @@ fdisk_read_sector:
 	; Seventh parameter byte = 0x1b (GAP1 default size)
 	; Eighth parameter byte = 0xff (all floppy drives use 512bytes per sector)
 
-	movd mm0, edx
-	
-	push ebx
-	push edx
+	movd mm0, ecx
+	movd mm1, edx
 	
 	mov dx, 0x0400
-	mov ecx, [ecx]
-	call print_hex_dword
+	call print_hex_dword		; printing out ecx
 	
-	pop edx
-	
-	push ecx
-	mov ecx, edx
+	movd ecx, mm1
 	mov dx, 0x040c
-	call print_hex_dword
+	call print_hex_dword		; print out edx
 
 	call fdisk_dma_read_init
-	
-	pop ecx
-	mov ecx, [ecx]			; ecx contains the address of a struct with the data needed for the operation
-	
-	push edx
 
 	call fdisk_verify_ready
 	test al, al
@@ -403,23 +392,22 @@ fdisk_read_sector:
 	mov dx, FDA_FIFO
 	mov al, FD_RW_MFM | FD_RW_MT | FD_READ_DATA		; Read command = MT bit | MFM bit | 0x6
 	out dx, al
-
-	mov al, ch	 	; ch will contain the head number
+	
+	movd eax, mm0	; restore ecx
+	shr eax, 8		;ch = drive | cl = head, need head << 2 | drive
 	shl al, 2
-	
-	mov ebx, ecx 	; ecx's high word will contain the drive number
-	shr ebx, 16
-	
-	or al, bl		; bl contains the head number 
+	or al, ah		; get the drive and put it into al as well
 	out dx, al
 	
-	mov al, cl		; cl will contain the track (cylinder)
+	movd eax, mm0	; restore ecx into eax, ; al will contain the track (cylinder)
 	out dx, al
 	
-	mov al, bl		; bl contains the head number (again) 
+	movd ecx, mm0	; restore ecx
+	shr eax, 8		; ah will contain the head number until we shift it down.  
 	out dx, al
 	
-	movd eax, mm0	; edx->mm0->eax will contain the starting sector number, at least in al
+	movd eax, mm1	; edx->mm0->eax will contain the starting sector number, at least in ah
+	shr eax, 8		; shift it down
 	out dx, al
 	
 	mov al, 2		; 2 (apparently this means 512 bytes / sector, don't know what the other settings could be)
@@ -435,7 +423,7 @@ fdisk_read_sector:
 	out dx, al
 	
 	call fdisk_display_msr
-	call getchar_pressed
+	;call getchar_pressed
 	
 	mov dx, FDA_MSR 	; check to make sure that RQM = 1
 	fdisk_read_wait_for_msr:
@@ -445,7 +433,7 @@ fdisk_read_sector:
 	jz fdisk_read_wait_for_msr
 	
 	call fdisk_display_msr
-	call getchar_pressed
+	;call getchar_pressed
 	
 	mov cx, 7
 	fdisk_read_status_bytes:
@@ -458,7 +446,7 @@ fdisk_read_sector:
 	
 	mov edi, fdisk_sector_data
 	
-	call getchar_pressed
+	;call getchar_pressed
 	
 	mov ecx, [0x1000]
 	mov dx, 0x0600
@@ -472,8 +460,6 @@ fdisk_read_sector:
 	
 	exit_fdisk_read_sector:
 	
-	pop edx
-	pop ebx
 	ret
 
 floppy_interrupt_irq6:

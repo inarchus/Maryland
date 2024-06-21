@@ -31,9 +31,9 @@ String & String::concatenate(const String & rhs)
 	{
 		new_string[i] = p_char_string[i];
 	}
-	for(unsigned int j = n_length; i < n_length + rhs_length + 1; i++)
+	for(unsigned int j = n_length; j < n_length + rhs.n_length + 1; j++)
 	{
-		new_string[i] = rhs.p_char_string[i];
+		new_string[j] = rhs.p_char_string[j - n_length];
 	}
 	new_string[n_length + rhs.n_length] = 0; // null terminate
 	
@@ -69,27 +69,25 @@ bool String::startswith(const String & rhs) const
 }
 String & String::upper()
 {
-	String upper_string(*this);
-	for(unsigned int i = 0; i < upper_string.n_length; i++)
+	for(unsigned int i = 0; i < n_length; i++)
 	{
-		if ('a' <= upper_string.p_char_string[i] && upper_string.p_char_string[i] <= 'z')
+		if ('a' <= p_char_string[i] && p_char_string[i] <= 'z')
 		{
-			upper_string.p_char_string[i] -= 0x20;
+			p_char_string[i] -= 0x20;
 		}
 	}
-	return upper_string;
+	return *this;
 }
 String & String::lower()
 {
-	String lower_string(*this);
-	for(unsigned int i = 0; i < lower_string.n_length; i++)
+	for(unsigned int i = 0; i < n_length; i++)
 	{
-		if ('A' <= lower_string.p_char_string[i] && lower_string.p_char_string[i] <= 'Z')
+		if ('A' <= p_char_string[i] && p_char_string[i] <= 'Z')
 		{
-			lower_string.p_char_string[i] += 0x20;
+			p_char_string[i] += 0x20;
 		}
 	}	
-	return lower_string;
+	return *this;
 }
 
 inline unsigned int String::length() const
@@ -109,10 +107,11 @@ bool String::operator == (const String & rhs) const
 {
 	return equals(rhs);
 }
-String & String::operator + (const String & rhs)
+String String::operator + (const String & rhs)
 {
-	String new_string(*this);
-	return new_string.concatenate(rhs);
+	//String new_string(*this);
+	concatenate(rhs);
+	return *this;
 }
 String & String::operator += (const String & rhs)
 {

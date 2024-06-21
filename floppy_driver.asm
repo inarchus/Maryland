@@ -229,7 +229,7 @@ fdisk_init_controller:
 	call fdisk_version
 	cmp al, 0x90
 	
-	jne fdisk_init_controller_exit
+	; jne fdisk_init_controller_exit
 	mov dx, FDA_FIFO
 	mov al, FCMD_CONFIGURE
 	out dx, al

@@ -36,7 +36,7 @@ void main_shell(char * in_string)
 		}			
 		else if(startswith(in_string, "fdisk read"))
 		{
-			unsigned int head_track_sector_count = hex_str_to_value(in_string + 11);
+			unsigned int drive_track_head_sector = hex_str_to_value(in_string + 11);
 			union FloppyDiskRead fdr;
 			fdr.unused = 0xff;
 			fdr.drive = 0;

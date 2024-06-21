@@ -14,12 +14,13 @@ extern dword eshell_entry(int rows, int cols);
 
 
 union FloppyDiskRead {
-	dword drive_track;
+	dword all_data;
 	struct __attribute__((packed)) 
 	{
-		word track;
-		byte drive;
-		byte unused;
+		byte sector;
+		byte track;
+		byte drive_head;
+		byte n_sectors;
 	};
 };
 
@@ -41,7 +42,7 @@ extern void display_cpuid();
 extern void fdisk_init_controller();
 extern void display_stack_values(unsigned int a, unsigned short b);
 
-extern dword __fastcall fdisk_read_sector(union FloppyDiskRead * fdr, dword sector);
+extern dword __fastcall fdisk_read_sector(dword drive_head_track, dword sector);
 extern void fdisk_display_msr();
 extern void __fastcall fdisk_recalibrate(dword drive_number);
 extern byte fdisk_version();
@@ -57,7 +58,7 @@ extern void ata_identify_drives();
 extern void ata_display_status();
 extern void __fastcall ata_write_sector_lba(dword controller_and_drive, dword num_sectors, qword lba_address, dword address);
 extern void __fastcall ata_read_sector_lba(dword controller_and_drive, dword num_sectors, qword lba_address, dword address);
-
+extern void __fastcall configure_pit(unsigned int reload_value);
 
 extern void __fastcall print_decimal(dword number, dword position);
 

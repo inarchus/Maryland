@@ -36,12 +36,19 @@ void main_shell(char * in_string)
 		}			
 		else if(startswith(in_string, "fdisk read"))
 		{
-			unsigned int drive_track_head_sector = hex_str_to_value(in_string + 11);
-			union FloppyDiskRead fdr;
-			fdr.unused = 0xff;
-			fdr.drive = 0;
-			fdr.track = 0; 					// already read all of track 0
-			fdisk_read_sector(&fdr, 1); 	// read starting at sector 1.  
+			//union FloppyDiskRead fdr;
+			unsigned int input_values = hex_str_to_value(in_string + 11);
+			unsigned int sectors = input_values & 0xffff;
+			
+			// ecx = [controller=0 for now | drive = 0 = fda for now| ch = head | cl = track]
+			//  edx = [dh = sector_start | dl = n_sectors]
+			fdisk_read_sector(input_values >> 16, sectors);
+		}
+		else if(startswith(in_string, "configure pit"))
+		{
+			unsigned int pit_word = hex_str_to_value(in_string + 13);
+			print_hex_word(pit_word, 0x0400);
+			configure_pit(pit_word);
 		}
 		else if(cstrings_equal(in_string, "display msr"))
 		{

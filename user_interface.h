@@ -29,38 +29,6 @@ class EScreenBuffer
 };
 
 
-class EFrame : public ETUIObject
-{
-	public:
-		EFrame();
-		void redraw();
-};
-
-class ETextInput : public ETUIObject
-{
-	public:
-	private:
-};
-
-class EButton : public ETUIObject
-{
-	public:
-		void press() {}
-	private:
-};
-
-class ETextDisplay : public ETUIObject
-{
-	public:
-		String & getText() 
-		{
-			return display_text;
-		}
-		void setText(char * new_text) {}
-	private:
-		String display_text;
-};
-
 class EShellTextUI
 {
 	public:

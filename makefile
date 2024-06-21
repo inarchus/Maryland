@@ -1,11 +1,10 @@
 ASSEMBLER = nasm
 ASM_FLAGS = elf32
-CLANG_FLAGS = -target i386 -nostdlib -ffreestanding 
-# -Wno-builtin-declaration-mismatch
+CLANG_FLAGS = -target i386 -nostdlib -ffreestanding -fno-exceptions -fno-rtti 
 
 export ASSEMBLY_OBJECTS_REAL_MODE = boot.o secondary.o 
 export ASSEMBLY_OBJECTS_PROTECTED = kernel.o pit.o pic8259.o interrupts.o memory.o floppy_driver.o rtc.o ata.o cpuid.o
-export CLANG_OBJECTS = user_interface.o kernel_c.o etui_object.o e_progress_bar.o memory_c.o string.o
+export CLANG_OBJECTS = user_interface.o kernel_c.o etui_object.o e_progress_bar.o memory_c.o string.o e_frame.o e_button.o e_text_input.o e_text_display.o 
 
 boot: assemble $(CLANG_OBJECTS) link-file
 	ld -m elf_i386 --build-id=none -T link.ld $(ASSEMBLY_OBJECTS_REAL_MODE) $(ASSEMBLY_OBJECTS_PROTECTED) $(CLANG_OBJECTS) -o boot.elf
@@ -18,8 +17,18 @@ link-file: makefile
 
 etui_object.o: etui/ETUIObject.h etui/ETUIObject.cpp
 	clang $(CLANG_FLAGS) -c etui/ETUIObject.cpp -o etui_object.o
+e_button.o: etui/EButton.cpp etui/EButton.h
+	clang $(CLANG_FLAGS) -c etui/EButton.cpp -o e_button.o
+e_text_input.o: etui/ETextInput.cpp etui/ETextInput.h
+	clang $(CLANG_FLAGS) -c etui/ETextInput.cpp -o e_text_input.o
+e_text_display.o: etui/ETextInput.cpp etui/ETextInput.h
+	clang $(CLANG_FLAGS) -c etui/ETextDisplay.cpp -o e_text_display.o
+e_frame.o: etui/EFrame.cpp etui/EFrame.h
+	clang $(CLANG_FLAGS) -c etui/EFrame.cpp -o e_frame.o
 e_progress_bar.o: etui/EProgressBar.cpp etui/EProgressBar.h
 	clang $(CLANG_FLAGS) -c etui/EProgressBar.cpp -o e_progress_bar.o
+
+
 user_interface.o: user_interface.cpp user_interface.h
 	clang $(CLANG_FLAGS) -c user_interface.cpp -o user_interface.o
 kernel_c.o: kernel.c kernel.h

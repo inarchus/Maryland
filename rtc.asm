@@ -198,12 +198,12 @@ rtc_interrupt_irq8:
 	jnz irq8_bypass_display
 	
 	push ecx
-	mov ecx, [rtc_current_tick_low]
-	mov dx, 0x1832
-	call print_hex_dword
+	;mov ecx, [rtc_current_tick_low]
+	;mov dx, 0x1832
+	;call print_hex_dword
 	
 	
-	mov cx, 0x1530
+	mov cx, 0x1828
 	call rtc_display_datetime
 	pop ecx	
 	

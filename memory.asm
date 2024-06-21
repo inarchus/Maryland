@@ -27,13 +27,13 @@
 ;;;;		void * end_address;
 ;;;;	}
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-extern memset
-extern memcopy
+extern memory_set
+extern memory_copy
 
 section .text
 
 
-memset:
+memory_set:
 	; pointer to mem
 	; value to set
 	; size of mem
@@ -71,7 +71,7 @@ memset:
 	leave
 	ret
 	
-memcopy:
+memory_copy:
 	;; assuming for now non-overlapping memory segments
 	push ebp
 	mov ebp, esp

@@ -270,6 +270,7 @@ getchar:
 		.found_single_code_released:
 			xor eax, eax
 		.continue_single_code:
+			push eax
 			push edx
 			push ecx
 			mov cl, 4
@@ -282,6 +283,7 @@ getchar:
 			jnz .print_extended_loop
 			pop ecx
 			pop edx
+			pop eax
 			
 			lodsb				; get the next byte after the identity string which is the new fake-ascii code we've invented for those letters.  
 			or ah, 0x02			; set special character

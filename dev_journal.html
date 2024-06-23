@@ -64,11 +64,29 @@ I've written a python script that generates link.ld, that was basically all the 
 <p> Soon we might have to write a bit of python to put the sectors onto the floppy correctly.  This is because we will be putting things in places that aren't determined by their sector on the drive and the offset from the 0x8000 start.  
 <p> We also have to think about what to do about the link.ld file.  It will be constantly updated and changed.  Maybe we can upload a sample version of it, with some explanation of what it's doing but then remove it from the actual git repository/add to .gitignore.  This is a small matter.
 <p> We also should think about maybe making this dev-journal officially an md format so that it can be read by the git repository.  
+<p> <a href="https://forum.osdev.org/viewtopic.php?f=1&t=31529">For help with the linker error caused by virtual tables</a>
 </section>
 
 <section>
 <h1> 21 June 2024 </h1>
+<p> Objectives: 
+<ul> 
+<li> Get a bit more of the ETUI library working.
+<li> Test the floppy track-head-sector reading to determine exactly what is stored where.  
+<li> Go back to the PIT and see if we can add some functionality maybe.  
+<li> Do a bit more of the ps2 keyboard driver to get it to the point where we can use it for function keys, arrow keys, etc.  
+<li> Work on the dynamic memory allocation and deallocation to the point where at least it gets freed to be re-used.
+<li> Get the git-repo to the point where a pull request and make will actually work.  
+<li> Implement a split function in the string class now that array is working.
+</ul>
+</section>
+<section>
+<h1> 22 June 2024 </h1>
+<p> Objectives: 
+<h1> Keyboard Work </h1>
+I worked all day over a very small piece of code, not even successfully.  But here's what I did accomplish, if we can even call it that.  We moved the functionality from constant polling to an IRQ1 which gets called.  I created a buffer for the raw scancodes and then a queue of somewhat processed scancodes so that they are separated into quad words for processing. I've learned a few things like that if you type fast enough, a PS2 keyboard will send multiple singleton scancodes at once, forcing you to split them, I assume it can also do this with multi-part scancodes as well.  I had too much functionality in the irq handler and we have to keep those functions simple, because they need to be 100% airtight, since any problem with them will cause a GP fault or something like that.  Processing these scancodes is kind of complex, since there is also indeterminacy.  Just seeing 0xe0 doesn't mean it's 0xe0 + 0xXY where you get one additioanl code, but there's also the printscreen commands which are 0xe0 [xx] 0xe0 [yy].  
 
+Currently it's still not really working perfectly, though thankfully there is a distinction between the arrow keys and keypad, arrow keys use extended codes whereas keypad keys are regular.  It was difficult to determine this, and catch all of the bytes being output by the IRQ but we have them now.  Processing is still an issue.  
 </section>
 </body>
 

@@ -1,6 +1,8 @@
 #ifndef __ETUI_OBJECT__
 #define __ETUI_OBJECT__
 
+enum EBorderType {borderless, single_line, double_line};
+
 class ETUIObject
 {
 	public:

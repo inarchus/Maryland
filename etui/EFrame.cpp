@@ -5,11 +5,6 @@ EFrame::EFrame()
 
 }
 
-void EFrame::redraw()
-{
-
-}
-
 bool EFrame::addChild(ETUIObject * p_object)
 {
 	return false;
@@ -23,4 +18,8 @@ bool EFrame::removeChild(ETUIObject * p_object)
 void EFrame::redraw()
 {
 	
+	for(unsigned int i = 0; i < children.size(); i++)
+	{
+		children[i]->redraw();
+	}
 }

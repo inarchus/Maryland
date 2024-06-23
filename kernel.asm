@@ -222,15 +222,7 @@ getline:
 		push ecx
 		push edx
 		call getchar_pressed
-		
-		push ecx
-		push edx
-		mov ecx, eax
-		mov edx, 0x1300
-		call print_hex_dword
-		pop ecx
-		pop edx
-		
+
 		cmp al, BACKSPACE
 		je getline_backspace
 		cmp al, 0x0a

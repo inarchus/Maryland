@@ -20,11 +20,12 @@ extern display_pic_registers
 
 section .text
 
+
 configure_pic:
 	cli 
 	push edx
 	push eax
-	
+	push ecx
 	mov al, 0x11
 	mov dx, PIC_MASTER_CMD
 	out dx, al						; out PIC_MASTER_CMD, 0x11		; ICW4 | INIT
@@ -48,7 +49,7 @@ configure_pic:
 
 	; set the masks so that PIT, Floppy and Mouse are enabled, currently keep keyboard interrupts disabled.  
 	;; i think that 0's are enabled, 1 is 'masked'
-	mov cx, 11111110_10111010b
+	pop ecx 
 	call send_pic_word
 	
 	pop eax

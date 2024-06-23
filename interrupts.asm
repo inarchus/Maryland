@@ -26,6 +26,8 @@ extern print_hex_dword
 extern configure_interrupt_descriptor_table
 extern set_interrupt_callback
 
+extern ps2_keyboard_irq1
+
 section .text
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -198,6 +200,10 @@ configure_interrupt_descriptor_table:
 	mov edx, general_protection_fault
 	call set_interrupt_callback
 	
+	mov ecx, 0x21					; must be interupt 0x21 = 33, IRQ1 = int 0x20 + irq
+	mov edx, ps2_keyboard_irq1		; not always enabled, must enable through the PIC
+	call set_interrupt_callback
+
 	ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

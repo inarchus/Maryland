@@ -24,7 +24,7 @@ PIT_16BITS			equ 	0x00
 PIT_4BITBCD			equ 	0x01
 
 extern read_pit
-extern configure_pit
+extern configure_pit				; void __fastcall configure_pit(int reload_value)
 extern pit_interrupt_irq0
 extern print_hex_word
 extern print_hex_dword
@@ -56,28 +56,36 @@ pit_interrupt_irq0:
 	
 	iretd
 
+; void __fastcall configure_pit(int reload_value)
 configure_pit:
+	push edx
+	push eax
+
 	mov dx, 0x43
 	mov al, PIT_16BITS | PIT_OP_MODE_3 | PIT_ACCESS_LOW | PIT_ACCESS_HIGH | PIT_CHANNEL_0
 	cli 
 	out dx, al
-	
+	;           time in ms = reload_value * 3000 / 3579545 (from osdev)... 
 	; specify the reload value, let's try for the slowest possible tick at first... low and then high byte
 	mov dx, 0x40
-	mov al, 0x34		;  this is the timing low word
+	mov al, cl		;  this is the timing low word
 	out dx, al
-	mov al, 0x12		; this is the timing high word
+	mov al, ch		; this is the timing high word
 	out dx, al
 	
 	mov al, 0
 	out dx, al
 	out dx, al
 	
+	push ecx
 	mov ecx, 0x20				; set ecx to 0 because this is the 0th PIC interrupt
 	mov edx, pit_interrupt_irq0
 	call set_interrupt_callback
 	
 	sti		; as long as we mask the pit IRQ, this doesn't blow everything up.  
+	pop ecx
+	pop eax
+	pop edx
 	ret
 	
 

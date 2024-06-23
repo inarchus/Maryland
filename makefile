@@ -3,7 +3,7 @@ ASM_FLAGS = elf32
 CLANG_FLAGS = -target i386 -nostdlib -ffreestanding -fno-exceptions -fno-rtti 
 
 export ASSEMBLY_OBJECTS_REAL_MODE = boot.o secondary.o 
-export ASSEMBLY_OBJECTS_PROTECTED = kernel.o pit.o pic8259.o interrupts.o memory.o floppy_driver.o rtc.o ata.o cpuid.o
+export ASSEMBLY_OBJECTS_PROTECTED = kernel.o pit.o pic8259.o interrupts.o memory.o floppy_driver.o rtc.o ata.o cpuid.o keyboard.o
 export CLANG_OBJECTS = user_interface.o kernel_c.o etui_object.o e_progress_bar.o memory_c.o string.o e_frame.o e_button.o e_text_input.o e_text_display.o 
 
 boot: assemble $(CLANG_OBJECTS) link-file
@@ -40,6 +40,8 @@ string.o: string.h string.cpp
 
 assemble: $(ASSEMBLY_OBJECTS_REAL_MODE) $(ASSEMBLY_OBJECTS_PROTECTED) 
 	$(ASSEMBLER) -f $(ASM_FLAGS) memory.asm -o memory.o
+keyboard.o: keyboard.asm ps2map.asm
+	$(ASSEMBLER) -f $(ASM_FLAGS) keyboard.asm -o keyboard.o
 floppy_driver.o: floppy_driver.asm
 	$(ASSEMBLER) -f $(ASM_FLAGS) floppy_driver.asm -o floppy_driver.o
 rtc.o: rtc.asm
@@ -63,7 +65,7 @@ cpuid.o: cpuid.asm
 clean:
 	rm *.o boot.bin
 run:
-	qemu-system-i386 -fda boot.qcow2 -hda /mnt/d/Virtual\ Machines/Maryland/Maryland.vmdk -boot order=a -cpu pentium3,sse=on
+	qemu-system-i386 -fda boot.qcow2 -hda /mnt/d/Virtual\ Machines/Maryland/Maryland.vmdk -boot order=a -cpu pentium3,sse=on -k en-us
 # -D qemu_i386.log -d cpu ; we want to turn logging on but this is too much info.  
 run64:
 	qemu-system-x86_64 -fda boot.qcow2 -hda /mnt/d/Virtual\ Machines/Maryland/Maryland.vmdk -cpu Nehalem,sse2=on
@@ -74,3 +76,6 @@ vfd: boot
 	cp boot.bin floppy.vfd
 	truncate -s 1474560 floppy.vfd
 	cp floppy.vfd /mnt/d/Projects/
+
+vmdk-disk:
+	qemu-image create -f vmdk -o subformat=monolithicFlat Maryland.vmdk 40M

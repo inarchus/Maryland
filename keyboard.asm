@@ -118,9 +118,6 @@ process_scancodes:
 			mov edi, scancode_queue
 		.no_reset_edi:
 		
-		;mov ecx, [edi - 8]
-		;add dx, 10
-		;call print_hex_dword 
 		cmp bl, bh									; bl = currently reading location, bh = next write location for scancode, stop if equal
 	jne .process_loop
 	
@@ -164,14 +161,9 @@ get_next_scancode:
 	ret
 	
 	
-completed_successfully_str db "Completed successfully.", 0
-
 getchar_pressed:
 	call getchar
-	
-	mov ecx, eax
-	mov edx, 0x1200
-	call print_hex_dword
+	mov eax, [getchar_val]		; obviously this shouldn't need to be done, the result should come back to us in eax.
 	
 	test ah, 0x01
 	jz getchar_pressed	; if zero then the character is a release
@@ -220,6 +212,8 @@ getchar:
 	je .check_single_extended_codes
 	cmp al, 0xe1
 	je .check_higher_extended_codes
+	cmp al, 0x0
+	je .getchar_exit
 	
 	xor ah, ah
 	call check_control_keys 
@@ -238,6 +232,7 @@ getchar:
 	mov edx, 0x1800
 	call display_hex_byte
 	pop edx
+	mov dword [getchar_val], eax
 	jmp .getchar_exit
 	
 	.check_single_extended_codes:
@@ -270,37 +265,20 @@ getchar:
 		.found_single_code_released:
 			xor eax, eax
 		.continue_single_code:
-			push eax
-			push edx
-			push ecx
-			mov cl, 4
-			mov dx, 0x1100
-			.print_extended_loop:
-				lodsb 
-				call printchar
-				inc edx
-				dec cl
-			jnz .print_extended_loop
-			pop ecx
-			pop edx
-			pop eax
-			
+			add esi, 4			; ignore the scancode string
 			lodsb				; get the next byte after the identity string which is the new fake-ascii code we've invented for those letters.  
 			or ah, 0x02			; set special character
-			
-			push eax
-			mov dx, 0x1600
-			mov ecx, eax
-			call print_hex_dword
-			pop eax
+
+			mov ebx, dword [ebp - 4]
+			mov [getchar_val], eax		; again this shouldn't be necessary
 			
 			jmp .getchar_exit
 	
 	.check_higher_extended_codes:
 			
 	.getchar_exit:
-	add esp, 8
-	leave
+	add esp, 8		; cleanup the stack
+	leave			; restore ebp
 	ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -461,6 +439,7 @@ section .data
 	raw_scancode_write		db 0x0
 	raw_scancode_read		db 0x0
 	start_process_raw_scwr	db 0x0
+	getchar_val				dd 0x0
 section .bss
 	scancode_queue			resq 256
 	raw_scancode_buffer		resb 256	; just let it overflow...  

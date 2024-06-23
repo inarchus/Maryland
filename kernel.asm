@@ -25,7 +25,6 @@ extern cprintline
 extern cstrings_equal
 extern hex_dump
 extern print_string
-extern getchar_pressed
 extern print_decimal
 
 extern clear_screen
@@ -40,6 +39,7 @@ extern printline
 extern printlinef
 extern printstr
 extern printstrf
+extern printchar
 extern strings_equal
 extern print_hex_word
 extern chex_to_number
@@ -55,17 +55,20 @@ extern hex_str_to_value
 extern display_hex_byte
 extern display_ascii_characters
 
+; from keyboard.asm 
+extern getchar
+extern getchar_pressed
+extern keyboard_flags		; data, not a function
+
 ; from rtc.asm
 extern rtc_display_datetime
 extern rtc_get_tick
 extern rtc_enable
-;extern rtc_display_byte
 
 ; from pit.asm
 extern pit_interrupt_irq0
 extern pit_wait
 extern configure_pit
-;extern pit_interrupt_table_entry
 
 ; from pic8259.asm
 extern configure_pic
@@ -99,7 +102,8 @@ kernel_entry:
 	call rtc_enable			; Real Time Clock IRQ 8
 
 	; configure the PIC to use the PIT, Floppy Drive and RTC for now, add more features
-	call configure_pic		; PICs allow IRQs to flow from hardware to the processor as interrupts
+	mov cx, 11111110_10111000b	; this word allows us to set which irqs are enabled
+	call configure_pic			; PICs allow IRQs to flow from hardware to the processor as interrupts
 
 	push instring
 	call main_shell
@@ -218,6 +222,15 @@ getline:
 		push ecx
 		push edx
 		call getchar_pressed
+		
+		push ecx
+		push edx
+		mov ecx, eax
+		mov edx, 0x1300
+		call print_hex_dword
+		pop ecx
+		pop edx
+		
 		cmp al, BACKSPACE
 		je getline_backspace
 		cmp al, 0x0a
@@ -566,303 +579,6 @@ calculate_position:
 	ret
 
 
-getchar_pressed:
-	call getchar
-	test ah, 0x01
-	jz getchar_pressed	; if zero then the character is a release
-	test ah, 0x02		; if non-zero then it is a special character, not an ascii symbol
-	jnz getchar_pressed
-	cmp al, 0x80		; probably should set the 0x02 flag in ah but we'll fix that later as usual
-	jae getchar_pressed 	; this is an F1-F12 key, or some other key which is not translatable into ascii
-	
-	ret
-	
-getchar:
-	xor eax, eax		; for the return of the ascii and extended codes [ah = codes][al = ascii or special code]
-	xor ebx, ebx		; for the return of the 
-
-	wait_for_char:	
-		in al, 0x64
-		test al, 1
-		jz wait_for_char
-	
-	;; get a single code because most codes are singletons
-	in al, 0x60
-	;; test to see if the code is 0xE1 or 0xE0
-	
-	cmp al, 0xe0
-	je getchar_extended_scancode
-	cmp al, 0xe1
-	je getchar_super_extended_scancode
-	
-	call check_control_keys 
-	test ah, 2
-	jnz getchar_exit
-	
-	;; if we get here, then it is a singleton code, not extended
-	mov ebx, eax
-	push ebx
-	call set_pressed_or_released
-
-	push edx
-	mov edx, 0x1808
-	call display_hex_byte
-	pop edx
-
-	movzx ebx, al 			; save the scancode in bl
-	mov al, [single_scan_code_map + ebx]	; get the ascii code or special code
-	call shift_translate					; tests for the shift code and does all shift translations.
-
-	push edx
-	mov edx, 0x1800
-	call display_hex_byte
-	pop edx
-	
-	pop ebx
-	jmp getchar_exit						; and that's all she wrote
-	
-	getchar_extended_scancode:
-		; take the next scancode in
-		in al, 0x60
-		
-		;; check for the two weird ones, printscreen up and down will be either 0x2a or 0xb7 which don't match with any other scancodes...
-		cmp al, 0x2a
-		je check_printscreen_press
-		cmp al, 0xb7
-		je check_printscreen_release
-		
-		call set_pressed_or_released
-		
-		mov ebx, eax  ;; save the scancode for future use
-		push esi
-		mov esi, extended_keycodes
-		push ecx
-		single_extended_scancode_loop:
-			lodsb			; load a scancode into al
-			test al, al		; if it's null exit
-			jz exit_scancode_single_extended
-			push eax
-			lodsd 			; loads the string into eax		
-			mov edi, eax
-			pop eax
-			cmp al, bl		; compare it with the current scancode
-			jne single_extended_scancode_loop
-
-		or ah, 2
-		call check_extended_control_keys
-		pop ecx
-		pop esi
-		jmp getchar_exit
-		
-		exit_scancode_single_extended:
-			; invalid code
-			pop ecx
-			pop esi
-		exit_printscreen_check_failed:
-			xor eax, eax
-			not eax
-			ret
-			
-		check_printscreen_press:
-			; here we've scanned 0xe0 and then 0x2a
-			;printscreen_down_keycode		db 0xE0, 0x2A, 0xE0, 0x37
-			in al, 0x60
-			cmp al, 0xe0
-			jne exit_printscreen_check_failed
-			in al, 0x60
-			cmp al, 0x37
-			jne exit_printscreen_check_failed
-			or ah, 3	; pressed and special
-			mov ebx, 'PRSC'
-			ret
-		check_printscreen_release:
-			; here we've scanned 0xe0 and then 0xb7
-			;printscreen_up_keycode			db 0xE0, 0xB7, 0xE0, 0xAA
-			in al, 0x60
-			cmp al, 0xe0
-			jne exit_printscreen_check_failed
-			in al, 0x60
-			cmp al, 0xaa
-			jne exit_printscreen_check_failed
-			or ah, 2	; special
-			mov ebx, 'PRSC'
-			ret
-	getchar_super_extended_scancode:
-		;; remember that we've already scanned the 0xe1 so we need to check the rest.  
-		;; pause_keycode					db 0xE1, 0x1D, 0x45, 0xE1, 0x9D, 0xC5
-		push esi
-		lea esi, [pause_keycode + 1]
-		push ecx
-		push ebx
-		
-		mov ecx, 5
-		
-		check_pause_loop:
-			in al, 0x64
-			test al, 1
-			jz pause_check_failed
-			lodsb
-			mov bl, al
-			in al, 0x60
-			cmp al, bl
-			jne pause_check_failed
-			
-		loop check_pause_loop
-		
-		mov ebx, 'PAUS'
-		mov ax, 0x0380 ; special character pressed
-		jmp pause_passed
-		pause_check_failed:
-			xor eax, eax
-			not eax
-		pause_passed:
-			pop ebx
-			pop ecx
-			pop esi
-			ret
-		
-	getchar_exit:
-	ret
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;; set_pressed_or_released(al, ah) -> ah			modifies(ah)									  ;;;; 	
-;;;; 	sets the pressed flag in ah, bit 0.															  ;;;; 	
-;;;;	returns the value in ah										 								  ;;;; 	
-;;;;																 								  ;;;; 	
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-set_pressed_or_released:
-	or ah, 1				; set pressed by default
-	cmp al, 0x80
-	jb pressed_key
-		sub al, 0x80		; subtract 0x80 to get the pressed equivalent code and test for that. 
-		and ah, ~0x01		; unset the pressed code
-	pressed_key:
-		ret
-
-
-shift_translate:
-	;	evaluates keyboard_flags for shift and then applies the proper transformation of ascii to the element in al. 
-	; 	modifies eax
-	push esi
-	push ebx
-	test word [keyboard_flags], 0x0003
-	jz shift_translate_end
-
-	cmp al, 'a'
-	jb shift_translate_check_special
-	cmp al, 'z'
-	ja shift_translate_check_special
-	sub al, 0x20
-	jmp shift_translate_end
-	
-	shift_translate_check_special:
-	mov ebx, eax
-	mov esi, shift_symbol_translations
-	
-	shift_translate_loop:
-		lodsw
-		test ax, ax
-		jz shift_translate_end
-		cmp al, bl
-		je shift_translate_found
-	jmp shift_translate_loop
-	
-	shift_translate_found:
-		mov bl, ah
-		mov eax, ebx
-	shift_translate_end:
-	pop ebx
-	pop esi
-	ret
-
-
-check_extended_control_keys:
-	
-	cmp al, 0x1c 						; keypad enter pressed
-	jne ceckeys_kdiv
-	mov al, 0x0a						; set newline
-	and ah, 0xfd						; unset special character
-	ret
-	
-	ceckeys_kdiv:
-	cmp al, 0x35 						; keypad enter pressed
-	jne ceckeys_check2
-	mov al, 0x2f						; set newline
-	and ah, 0xfd						; unset special character
-	ret
-	
-	ceckeys_check2:
-	cmp al, 0x1d						; right control pressed
-	jne ceckeys_check3
-	or word [keyboard_flags], 0x0008 ;  turn on bit 3
-	ret
-	
-	ceckeys_check3:
-	cmp al, 0x38						; right control pressed
-	jne cec_return
-	or word [keyboard_flags], 0x0020 ;  turn on bit 5
-	ret
-	
-	cec_return:
-	ret
-	
-
-check_control_keys:
-	or ah, 0x02
-	
-	cmp al, 0x2a 	; left shift pressed
-	jne getchar_bypass_check_p1
-	or word [keyboard_flags], 0x0001 ;  turn on bit 0
-	ret
-	
-	getchar_bypass_check_p1:
-	cmp al, 0x36 	; right shift pressed
-	jne getchar_bypass_check_p2
-	or word [keyboard_flags], 0x0002 ;  turn on bit 1
-	ret
-
-	getchar_bypass_check_p2:
-	cmp al, 0x1d 	; left control pressed
-	jne getchar_bypass_check_p3
-	or word [keyboard_flags], 0x0004 ;  turn on bit 2
-	ret
-
-	getchar_bypass_check_p3:
-	cmp al, 0x38 	; left alt pressed	
-	jne getchar_bypass_check_r0
-	or word [keyboard_flags], 0x0010 ;  turn on bit 4
-	ret
-
-	getchar_bypass_check_r0:
-	cmp al, 0xaa 	; left shift released
-	jne getchar_bypass_checkr1
-	and word [keyboard_flags], 0xFFFE ;  turn off bit 0	
-	ret
-
-	getchar_bypass_checkr1:
-	cmp al, 0xb6 	; right shift released
-	jne getchar_bypass_checkr2
-	and word [keyboard_flags], 0xFFFD ;  turn off bit 1	
-	ret
-
-	getchar_bypass_checkr2:
-	cmp al, 0x9d 	; left control released
-	jne getchar_bypass_checkr3
-	and word [keyboard_flags], 0xFFFB ;  turn off bit 2
-	ret
-
-	getchar_bypass_checkr3:
-	cmp al, 0xb8 	; left alt released	
-	jne getchar_bypass_checks
-	and word [keyboard_flags], 0xFFEF ;  turn off bit 4
-	ret
-	
-
-	getchar_bypass_checks:
-	and ah, 0xFD ;  not special
-	mov bl, al ; save the original scancode
-	
-	ret
 
 
 display_ascii_characters:
@@ -1210,22 +926,6 @@ pit_wait:
 	ret
 	
 
-keyboard_irq1:
-	push eax
-	push edx
-	push esi
-
-	; end of interrupt
-	mov al, 0x20
-	out 0x20, al
-
-	pop esi
-	pop edx	
-	pop eax
-	
-	iretd
-
-
 mouse_interrupt_irq12:
 	push eax
 	push edx
@@ -1253,7 +953,6 @@ general_fault_handler:
 
 
 section .data
-	%include "ps2map.asm"
 	empty_string 			db 0
 	hexdump_str			    db  "Hexdump: ", 0
 	protected_mode_string 	db 	"We have entered protected mode.", 0
@@ -1264,7 +963,6 @@ section .data
 	alt_down_string			db  " ALT ", 0
 	up_string				db 	"-----", 0
 	; keyboard flags
-	keyboard_flags 			dw 0x0000 ; [ - - - - - CAPL SCRL ] [-, -, RALT, LALT, RCTRL, LCTRL, RSHIFT, LSHIFT] ; where to put insert?
 	cursor_position			dw 0x0100
 	scancode_queue 			dw 0
 	mxcsr_reg_value			dd 0x0000_1F80

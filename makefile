@@ -13,7 +13,7 @@ boot: assemble $(CLANG_OBJECTS) link-file
 	@stat boot.bin | grep "Size:"
 
 link-file: makefile
-	python generate_link_file.py
+	python3 generate_link_file.py
 
 etui_object.o: etui/ETUIObject.h etui/ETUIObject.cpp
 	clang $(CLANG_FLAGS) -c etui/ETUIObject.cpp -o etui_object.o

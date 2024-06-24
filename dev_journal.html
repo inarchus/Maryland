@@ -82,11 +82,17 @@ I've written a python script that generates link.ld, that was basically all the 
 </section>
 <section>
 <h1> 22 June 2024 </h1>
-<p> Objectives: 
 <h1> Keyboard Work </h1>
 I worked all day over a very small piece of code, not even successfully.  But here's what I did accomplish, if we can even call it that.  We moved the functionality from constant polling to an IRQ1 which gets called.  I created a buffer for the raw scancodes and then a queue of somewhat processed scancodes so that they are separated into quad words for processing. I've learned a few things like that if you type fast enough, a PS2 keyboard will send multiple singleton scancodes at once, forcing you to split them, I assume it can also do this with multi-part scancodes as well.  I had too much functionality in the irq handler and we have to keep those functions simple, because they need to be 100% airtight, since any problem with them will cause a GP fault or something like that.  Processing these scancodes is kind of complex, since there is also indeterminacy.  Just seeing 0xe0 doesn't mean it's 0xe0 + 0xXY where you get one additioanl code, but there's also the printscreen commands which are 0xe0 [xx] 0xe0 [yy].  
 
 Currently it's still not really working perfectly, though thankfully there is a distinction between the arrow keys and keypad, arrow keys use extended codes whereas keypad keys are regular.  It was difficult to determine this, and catch all of the bytes being output by the IRQ but we have them now.  Processing is still an issue.  
+
+<p> I also tried to do some work reconfiguring the PIT, no success there, it seems to tick at the same rate regardless of the reconfiguration parameter I give it.  More investigation necessary.
+<p> 
+</section>
+<section>
+<h1> 23 June 2024 </h1>
+
 </section>
 </body>
 

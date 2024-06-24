@@ -2,18 +2,20 @@ ASSEMBLER = nasm
 ASM_FLAGS = elf32
 CLANG_FLAGS = -target i386 -nostdlib -ffreestanding -fno-exceptions -fno-rtti 
 
+include config.mk
+
 export ASSEMBLY_OBJECTS_REAL_MODE = boot.o secondary.o 
 export ASSEMBLY_OBJECTS_PROTECTED = kernel.o pit.o pic8259.o interrupts.o memory.o floppy_driver.o rtc.o ata.o cpuid.o keyboard.o
 export CLANG_OBJECTS = user_interface.o kernel_c.o etui_object.o e_progress_bar.o memory_c.o string.o e_frame.o e_button.o e_text_input.o e_text_display.o 
 
-boot: assemble $(CLANG_OBJECTS) link-file
+boot: link-file config.mk assemble $(CLANG_OBJECTS) 
 	ld -m elf_i386 --build-id=none -T link.ld $(ASSEMBLY_OBJECTS_REAL_MODE) $(ASSEMBLY_OBJECTS_PROTECTED) $(CLANG_OBJECTS) -o boot.elf
 	objcopy -O binary boot.elf boot.bin
 	qemu-img convert -f raw boot.bin -O qcow2 boot.bin boot.qcow2
 	@stat boot.bin | grep "Size:"
 
 link-file: makefile
-	python generate_link_file.py
+	python3 generate_link_file.py
 
 etui_object.o: etui/ETUIObject.h etui/ETUIObject.cpp
 	clang $(CLANG_FLAGS) -c etui/ETUIObject.cpp -o etui_object.o
@@ -65,10 +67,10 @@ cpuid.o: cpuid.asm
 clean:
 	rm *.o boot.bin
 run:
-	qemu-system-i386 -fda boot.qcow2 -hda /mnt/d/Virtual\ Machines/Maryland/Maryland.vmdk -boot order=a -cpu pentium3,sse=on -k en-us
+	qemu-system-i386 -fda boot.qcow2 -hda $(PATH_TO_VMDK_HDA) -boot order=a -cpu pentium3,sse=on -k en-us
 # -D qemu_i386.log -d cpu ; we want to turn logging on but this is too much info.  
 run64:
-	qemu-system-x86_64 -fda boot.qcow2 -hda /mnt/d/Virtual\ Machines/Maryland/Maryland.vmdk -cpu Nehalem,sse2=on
+	qemu-system-x86_64 -fda boot.qcow2 -hda $(PATH_TO_VMDK_HDA) -cpu Nehalem,sse2=on
 # -cpu Nehalem
 # A vfd file is literally a raw file containing exactly 1440kb or 1,474,560 bytes.  The bin is also a raw file, but doesn't have that exact requirement.  
 # So we'll just extend the file to the proper length using "truncate."  VFD format files work in the Hyper-V for windows 10 and VirutalBox
@@ -78,4 +80,4 @@ vfd: boot
 	cp floppy.vfd /mnt/d/Projects/
 
 vmdk-disk:
-	qemu-image create -f vmdk -o subformat=monolithicFlat Maryland.vmdk 40M
+	qemu-image create -f vmdk -o subformat=monolithicFlat $(PATH_TO_VMDK_HDA) 40M

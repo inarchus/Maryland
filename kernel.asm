@@ -78,6 +78,9 @@ extern display_pic_registers
 extern configure_interrupt_descriptor_table
 extern set_interrupt_callback
 
+; from memory.cpp
+extern initialize_origin
+
 section .text
 kernel_entry:
 	mov esp, 0x0a0000		; set the stack up to 10 MB so that we have plenty of room
@@ -104,6 +107,8 @@ kernel_entry:
 	; configure the PIC to use the PIT, Floppy Drive and RTC for now, add more features
 	mov cx, 11111110_10111000b	; this word allows us to set which irqs are enabled
 	call configure_pic			; PICs allow IRQs to flow from hardware to the processor as interrupts
+
+	call initialize_origin
 
 	push instring
 	call main_shell

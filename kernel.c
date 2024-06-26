@@ -5,7 +5,6 @@
 
 enum {FALSE = 0, TRUE = 1};
 
-
 void main_shell(char * in_string)
 {
 	int position = 0;
@@ -127,6 +126,10 @@ void main_shell(char * in_string)
 		{
 			print_hex_byte(sizeof(long long), 0x0300);
 		}
+		else if(cstrings_equal(in_string, "test memory allocation"))
+		{
+			run_memory_test();			
+		}
 		else
 		{
 			cprintline(in_string, 0);
@@ -134,3 +137,17 @@ void main_shell(char * in_string)
 	}
 }
 
+inline void cprint_hex_byte(unsigned char byte, unsigned int position)
+{
+	print_hex_byte(byte, position);
+}
+
+inline void cprint_hex_word(unsigned short word, unsigned int position)
+{
+	print_hex_word(word, position);
+}
+
+inline void cprint_hex_dword(unsigned int dword, unsigned int position)
+{
+	print_hex_dword(dword, position);
+}

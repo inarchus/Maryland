@@ -62,4 +62,13 @@ extern void __fastcall configure_pit(unsigned int reload_value);
 
 extern void __fastcall print_decimal(dword number, dword position);
 
+extern void run_memory_test();
+
+extern void cprint_hex_byte(unsigned char byte, unsigned int position);
+extern void cprint_hex_word(unsigned short word, unsigned int position);
+extern void cprint_hex_dword(unsigned int dword, unsigned int position);
+
+inline void cprint_hex_byte(unsigned char byte, unsigned int position);
+inline void cprint_hex_word(unsigned short word, unsigned int position);
+inline void cprint_hex_dword(unsigned int dword, unsigned int position);
 #endif 

@@ -46,7 +46,7 @@ def generate_link_file(file_name, linker_json, **options):
     object_files = read_environment_variables()
 
     # make a backup of the link.ld file in case we screw something up terribly.
-    shutil.copy(file_name, os.path.join('backup', file_name + '.bak'))
+    # shutil.copy(file_name, os.path.join('backup', file_name + '.bak'))
     segment_list = []
     segment_list.append(generate_segment('boot-text', address=0x7c00, files=[('boot.o', '.text')]))
     segment_list.append(generate_segment('boot-data', subalign=2, files=[('boot.o', '.data')]))

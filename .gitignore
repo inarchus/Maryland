@@ -7,3 +7,9 @@
 *~
 backup/
 documentation/
+link.ld
+config.mk
+*_LOCAL_*
+*_REMOTE_*
+*_BASE_*
+*_BACKUP_*

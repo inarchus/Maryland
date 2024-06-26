@@ -158,15 +158,22 @@ menu_options:
 		mov si, measure_high_ram_string
 		call startswith
 		test ax, ax
-		jz test_get_cpuid
+		jz test_ata_drive_data
 		call measure_high_memory
+	test_ata_drive_data:
+		mov di, input_line
+		mov si, get_ata_data_string
+		call startswith
+		test ax, ax
+		jz test_get_cpuid
+		call get_ata_drive_data
 	test_get_cpuid:
 		mov di, input_line
 		mov si, cpuid_string
 		call startswith
 		test ax, ax
 		jz menu_options_ret
-		call get_cpu_info		
+		call get_cpu_info
 	menu_options_ret:
 		ret
 
@@ -192,6 +199,17 @@ get_cpu_info:
 	
 	add sp, 16
 	leave
+	ret
+
+get_ata_drive_data:
+	
+	mov si, drive_output_buffer
+	mov dl, 0x80		; 	first hard drive is 0x80
+	mov ah, 0x48		;	extended read drive parameters
+	int 0x13			;	
+
+	; call word_to_hexstr
+	
 	ret
 
 measure_high_memory:
@@ -1173,6 +1191,8 @@ section .data
 
 	special_string db "This is a special string that I want to test out", 0
 	
+	get_ata_data_string db "ata identify drives"
+	
 	protected_mode_string db "We have entered protected mode", 0
 	a20enstr 	db	"a20 is currently enabled.", 0
 	a20disstr 	db	"a20 is currently disabled.", 0 
@@ -1207,6 +1227,7 @@ section .data
 							dd 		gdtable
 
 section .bss
-	input_line resb 80
-	register_values resw 16
-	hex_out_str resb 6
+	input_line 				resb 80
+	register_values 		resw 16
+	hex_out_str 			resb 6
+	drive_output_buffer 	resb 32

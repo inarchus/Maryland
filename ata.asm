@@ -31,6 +31,7 @@ ATAR_SEC_STATUS_CMD		equ 0x177		;
 
 extern printline
 extern printstrf
+extern printchar
 extern print_hex_byte
 extern print_hex_word
 extern print_hex_dword
@@ -38,6 +39,8 @@ extern ata_identify_drives
 extern ata_display_status
 extern ata_read_sector_lba
 extern ata_write_sector_lba
+
+extern clear_screen
 
 extern empty_string
 extern extended_code_str
@@ -366,34 +369,138 @@ ata_identify_drives:
 		dec cx
 	jnz ata_identify_drives_loop
 
-	mov esi, hard_drive_id_data
+	call clear_screen
 	
-	mov cx, 0x100
+	mov al, 0x0f
+	mov esi, LOG_SEC_COUNT			; words 10-19
+	mov dx, 0x0500
+	call printstrf
+	
+	mov ecx, [hard_drive_id_data + 2 * 102]		; since it's little endian take the bigger number first
+	mov dx, 0x0512
+	call print_hex_dword
+	
+	mov ecx, [hard_drive_id_data + 2 * 100]		; now look at the smaller one
+	add dx, 9
+	call print_hex_dword
+	
+	mov al, 0x0f
+	mov esi, LOG_SEC_SIZE
+	add dx, 0x10
+	call printstrf
+	
+	mov ecx, [hard_drive_id_data + 2 * 117]
+	add dx, 0x18
+	call print_hex_dword
+	
+	mov al, 0x0f
+	mov esi, PHYS_SEC_RATIO
 	mov dx, 0x0600
-	ata_identify_print_loop:
-		lodsw
-		
-		push ecx
-		mov cx, ax
-		call print_hex_word
-		add dx, 5
-		cmp dl, 75
-		jbe bypass_nextline
-		inc dh
-		xor dl, dl
-		bypass_nextline:
-		pop ecx
-		dec cx
-	jnz ata_identify_print_loop
+	call printstrf
+	
+	add dx, 22		; decimal 22 not hex.
+	mov ecx, [hard_drive_id_data + 2 * 106]
+	call print_hex_word
+
+	mov al, 0x0f
+	mov esi, SERIAL_NUM	
+	mov dx, 0x0300
+	call printstrf
+
+	mov ecx, 10	; 10 words, not bytes, just remember
+	lea edx, [hard_drive_id_data + 2 * 10]
+	push edx 
+	mov dx, 0x0310
+	call print_ata_string
+	add esp, 4
+	
+	
+	
+	mov al, 0x0f
+	mov esi, FIRMWARE_VER	
+	mov dx, 0x0328
+	call printstrf
+
+	mov ecx, 4	
+	lea edx, [hard_drive_id_data + 2 * 23]
+	push edx 
+	mov dx, 0x0338
+	call print_ata_string
+	add esp, 4
+	
+	mov al, 0x0f
+	mov esi, MODEL_NUM	
+	mov dx, 0x0400
+	call printstrf
+
+	mov ecx, 20
+	lea edx, [hard_drive_id_data + 2 * 27]
+	push edx 
+	mov dx, 0x0410
+	call print_ata_string
+	add esp, 4
+	
 	
 	ata_id_exit:
 	
 	ret
+	
+print_ata_string:
+	; ecx will contain the number of characters
+	; edx will be the edx location
+	; first stack argument will contain a pointer to the start address
+	; ATA strings may not be null terminated and are encoded backwards, i.e. "abcd" = [ba][dc], so we have to flip each byte in its word to get the correct order
+
+	push ebp
+	mov ebp, esp
+
+	push ecx
+	push edx
+	push esi
+
+	mov esi, [ebp - 4]
+	.ata_string_loop:
+		lodsw
+		xchg al, ah
+		call printchar
+		xchg al, ah
+		inc dx
+		call printchar
+		inc dx
+		dec cx
+	jnz .ata_string_loop
+	
+	pop esi
+	pop edx
+	pop ecx
+	
+	leave
+	ret
 
 section .data
-	MWDMA_STR	db		"Multiword DMA Mode: ", 0
-	UDMA_STR	db		"Ultra DMA Mode: ", 0
-	MAX_LBA		db		"Maximum LBA: ", 0
+	SERIAL_NUM		db		"Serial Number:", 0		; words 10-19 (ATA string)
+	FIRMWARE_VER	db		"Firmware Rev.:", 0		; words 23-26 (ATA string)
+	MODEL_NUM		db		"Model Num.:", 0		; words 27-46 (ATA string)
+	FEATURE_SET_1	db		"Feature Set 1:",0 		; word 82 command and feature sets supported 1
+	FEATURE_SET_2	db		"Feature Set 2:",0 		; word 83 command and feature sets supported 2
+	FEATURE_SET_3	db		"Feature Set 3:",0 		; word 84 command and feature sets supported 3
+	FEATURE_SET_4	db		"Feature Set 4:",0 		; word 85 command and feature sets supported 4
+	FEATURE_SET_5	db		"Feature Set 5:",0		; word 86 command and feature sets supported 5
+	FEATURE_SET_6	db		"Feature Set 6:",0 		; word 87 command and feature sets supported 6
+	STREAM_MIN_SIZE	db		"Min. Req. Size:", 0 	; word 95 stream minimum request size
+	STREAM_TR_DMA	db		"Transfer Time (DMA):", 0 ; word 96 stream transfer time (DMA)
+	STREAM_AC_LAT	db		"Access Latency:",0		;; word 97 stream access latency DMA & PIO
+	; word 98-99 Streaming Performance Granularity  (dword) / no idea what this is.  
+	LOG_SEC_COUNT	db		"Logical Sectors: ", 0		; words 100-103 total number of logical sectors (qword)
+	STREAM_TR_PIO 	db 		"Transfer Time (PIO):",0 	; streaming transfer time (PIO)
+	PHYS_SEC_RATIO	db 		"Phys/Log. Sec. Size:", 0 ; word 106 physical sector size / logical sector size
+	WW_NAME			db 		"World Wide Name:", 0	; words 108-111 world wide name ??
+	LOG_SEC_SIZE	db		"Logical Sector Size:", 0 ; words 117-118, logical sector size (dword)
+	; words 176-205, media serial number
+	
+	MWDMA_STR		db		"Multiword DMA Mode: ", 0	;
+	UDMA_STR		db		"Ultra DMA Mode: ", 0 		; Ultra DMA modes supported/selected
+	MAX_LBA			db		"Maximum LBA: ", 0			;
 
 	DRIVE_DOES_NOT_EXIST db		"Drive Does Not Exist", 0
 

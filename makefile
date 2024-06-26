@@ -1,6 +1,6 @@
 ASSEMBLER = nasm
 ASM_FLAGS = elf32
-CLANG_FLAGS = -target i386 -nostdlib -ffreestanding -fno-exceptions -fno-rtti 
+CLANG_FLAGS = -target i386 -nostdlib -ffreestanding -fno-exceptions -fno-rtti -mabi=lp64
 
 include config.mk
 
@@ -67,7 +67,7 @@ cpuid.o: cpuid.asm
 clean:
 	rm *.o boot.bin
 run:
-	qemu-system-i386 -fda boot.qcow2 -hda $(PATH_TO_VMDK_HDA) -boot order=a -cpu pentium3,sse=on -k en-us
+	qemu-system-i386 -fda boot.qcow2 -hda $(PATH_TO_VMDK_HDA) -boot order=a -cpu pentium3,sse=on -k en-us -vga std
 # -D qemu_i386.log -d cpu ; we want to turn logging on but this is too much info.  
 run64:
 	qemu-system-x86_64 -fda boot.qcow2 -hda $(PATH_TO_VMDK_HDA) -cpu Nehalem,sse2=on

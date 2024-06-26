@@ -25,6 +25,10 @@ namespace std {
 
 }
 
+extern "C" {
+	void run_memory_test();
+}
+
 typedef unsigned char byte;
 typedef unsigned short word;
 typedef unsigned int dword;
@@ -65,7 +69,7 @@ typedef struct MemoryBlock {
 	struct MemoryBlock * p_next, * p_prev;  // we'll have a linked list of memory blocks
 	void * start_address;
 	void * end_address;
-	qword allocated;						// one bit for each record.  
+	// qword allocated;						// one bit for each record.  
 } MemoryBlock;
 
 /*
@@ -73,6 +77,10 @@ typedef struct MemoryBlock {
 */
 MemoryBlock origin;
 
+extern "C" void initialize_block(MemoryBlock * p_block, MemoryBlock * p_prev);
+extern "C" void initialize_origin();
+
+void initialize_origin();
 void initialize_block(MemoryBlock * p_block, MemoryBlock * p_prev);
 
 void * allocate(std::size_t size);
@@ -80,7 +88,5 @@ void free(void * p_memory);
 void kill(void * p_memory);
 
 }
-
-
 
 #endif

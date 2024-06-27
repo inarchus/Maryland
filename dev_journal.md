@@ -96,9 +96,24 @@ I also tried to do some work reconfiguring the PIT, no success there, it seems t
 Finished a very rudimentary version of dynamic memory so that we can allocate and deallocate space.  Spent a few days reading up on the FAT12/16/32 format for disks and I have opinions of course, but I think I should be able to implement the standard pretty easily.  
 
 Accomplishments in the past few days are:
+------------------
 *	Built a bit of the FAT C++ code that will handle the file system.  It will be nice because we can then load the drive [hopefully] in another virtual machine and transfer files that way, or examine the files through a known working FAT implementation (windows 98/xp).  
 *	Built the virtual memory code that allocates virtual memory.  Currently I have MemoryBlocks which form a linked list of memory allocated spaces.  There are 4 MB allocated currently from 4MB to 8MB in linear memory which should be enough currently.  The limits are hard coded.  I haven't tested the full linked list yet, and there's no advanced garbage collection.  
 *	I think I hate the fact that in CPP when you add +i to a pointer it shifts not in bytes but by the sizeof(the underlying thing) \* i;  It's probably convenient for high level programmers but not very convenient for systems programmers who have to make sure everything is in (byte \*)'s to ensure that the shift is correct.  
 *	I wanted to create a TUI and also wanted to create the FAT format code but realized that they were probably dependent on new and delete for the TUI I need strings which need dynamic memory and for the FAT formatting process, reading and writing I probably need to allocate a block of memory, so that's why my priority was the memory allocation.  
 *	I tried a number of other hex codes for VGA formats to get more lines and columns but no success there.  Much of it just didn't work, or it prevented a screen refresh, or it just locked up before getting into the secondary bootloader.  
-*	
+*	I just finished up the Array and String classes, so that we can move on to the ETUI.  Now that we have strings we can take care of textboxes and inputs.  As an aside we're getting close to the memory limit of the two track 0's.  We'll have to load another track into memory soon to avoid problems.  The limit is 18,432 bytes per two track block.  C++ is guilty of something like 75% of this code bloat.  
+
+Current Goals
+------------------
+*	Work on the TUI finally and get something up and running. 
+*	Get the FAT32 file system up and running.  Allow the user to format floppy disks in fdb and hard drives in all hard drive slots.  
+*	Load and execute programs [maybe starting out in kernel mode]
+* 	Figure out paging.
+*	Move from kernel to user mode (ring 0->ring 3)
+* 	Provide programs with interrupts to make system calls back to kernel mode.  
+*	Write the Readme with build instructions. 
+
+27 June 2024
+=============
+

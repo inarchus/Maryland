@@ -2,6 +2,7 @@
 #define __STRING_H__
 
 #include "memory.h"
+#include "array.h"
 
 class String
 {
@@ -10,18 +11,19 @@ class String
 		String(const char * const p_string);
 		String(const String & copy_string);
 		
-		String & concatenate(const String & rhs);
-		bool equals(const String & rhs) const;
-		bool startswith(const String & rhs) const;
-		String & upper();
-		String & lower();
-		// array<String> & split(); needs array to be implemented
-		inline unsigned int length() const;
+		String & Concatenate(const String & rhs);
+		bool Equals(const String & rhs) const;
+		bool Startswith(const String & rhs) const;
+		String & Upper();
+		String & Lower();
+		Array<String> Split() const; 
+		String Substring(int start_index, int end_index) const;
+		inline unsigned int Length() const;
 		String & operator = (const String & rhs);
 		bool operator == (const String & rhs) const;
 		String operator + (const String & rhs);
 		String & operator += (const String & rhs);
-		
+		bool IsWhitespace(char x) const;
 		~String();
 	private:
 		unsigned int calculate_length(const char * const p_chars) const;

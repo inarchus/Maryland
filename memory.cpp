@@ -21,6 +21,8 @@ extern "C" void memory_copy(void * source, void * destination, unsigned int leng
 extern "C" void memory_set(void * memory, unsigned int size, unsigned long value);
 extern "C" byte getchar();
 
+
+
 void run_memory_test()
 {
 	int * array = new int[10];
@@ -112,6 +114,12 @@ typedef struct MemoryBlock {
 byte * p_dynamic_memory_start = (byte *)0x400000;		// again, dumbest thing imaginable, we're hard coding the start of the dynamic segment [heap]
 byte * p_dynamic_memory_current = (byte *)0x400000;
 byte * p_dynamic_memory_maximum = (byte *)0x800000;		// for now i'll give dynamic memory 4 MB, we're nowhere close to that yet.  
+
+/*
+	Here is the declaration of the origin memory block, essentially the base object in the entire allocation structure.  
+*/
+extern MemoryBlock origin;
+MemoryBlock origin;
 
 void * allocate(std::size_t size)
 {

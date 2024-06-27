@@ -25,6 +25,7 @@ class Array
 		
 		~Array();
 	private:
+		void copy(const Array<t> & rhs);
 		t * p_array;
 		unsigned int n_size;		// size of the Array object, number of elements inserted
 		unsigned int n_capacity;	// total capacity of the actual p_array, rather than just the number currently filled.

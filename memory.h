@@ -72,11 +72,6 @@ typedef struct MemoryBlock {
 	// qword allocated;						// one bit for each record.  
 } MemoryBlock;
 
-/*
-	Here is the declaration of the origin memory block, essentially the base object in the entire allocation structure.  
-*/
-MemoryBlock origin;
-
 extern "C" void initialize_block(MemoryBlock * p_block, MemoryBlock * p_prev);
 extern "C" void initialize_origin();
 

@@ -1,4 +1,5 @@
 #include "string.h"
+#include "array.h"
 #include "memory.h"
 
 
@@ -20,10 +21,15 @@ String::String(const String & copy_string)
 
 String::~String()
 {
-	delete p_char_string;
+	delete [] p_char_string;
 }
 
-String & String::concatenate(const String & rhs)
+bool String::IsWhitespace(char x) const
+{
+	return x == ' ' || x == '\n' || x == '\r' || x == '\t';
+}
+
+String & String::Concatenate(const String & rhs)
 {
 	char * new_string = new char[n_length + rhs.n_length + 1];
 	
@@ -43,7 +49,7 @@ String & String::concatenate(const String & rhs)
 	
 	return *this;
 }
-bool String::equals(const String & rhs) const
+bool String::Equals(const String & rhs) const
 {
 	if (n_length != rhs.n_length)
 		return false;
@@ -55,7 +61,7 @@ bool String::equals(const String & rhs) const
 	}
 	return true;
 }
-bool String::startswith(const String & rhs) const
+bool String::Startswith(const String & rhs) const
 {
 	if(n_length < rhs.n_length)
 		return false;
@@ -67,7 +73,7 @@ bool String::startswith(const String & rhs) const
 	}
 	return true;
 }
-String & String::upper()
+String & String::Upper()
 {
 	for(unsigned int i = 0; i < n_length; i++)
 	{
@@ -78,7 +84,7 @@ String & String::upper()
 	}
 	return *this;
 }
-String & String::lower()
+String & String::Lower()
 {
 	for(unsigned int i = 0; i < n_length; i++)
 	{
@@ -90,7 +96,7 @@ String & String::lower()
 	return *this;
 }
 
-inline unsigned int String::length() const
+inline unsigned int String::Length() const
 {
 	return n_length;
 }
@@ -105,17 +111,17 @@ String & String::operator = (const String & rhs)
 }
 bool String::operator == (const String & rhs) const
 {
-	return equals(rhs);
+	return Equals(rhs);
 }
 String String::operator + (const String & rhs)
 {
-	//String new_string(*this);
-	concatenate(rhs);
-	return *this;
+	String new_string(*this);
+	new_string.Concatenate(rhs);
+	return new_string;
 }
 String & String::operator += (const String & rhs)
 {
-	return concatenate(rhs);
+	return Concatenate(rhs);
 }
 
 void String::char_pointer_copy(const char * const p_chars)
@@ -128,6 +134,7 @@ void String::char_pointer_copy(const char * const p_chars)
 	{
 		p_char_string[i] = p_chars[i];
 	}
+	p_char_string[n_length] = 0; // null terminate
 }
 
 unsigned int String::calculate_length(const char * const p_chars) const
@@ -139,22 +146,41 @@ unsigned int String::calculate_length(const char * const p_chars) const
 	return length;	
 }
 
-	/*asm volatile (
-	    ".intel_syntax;"  // Switch to Intel syntax
-		"cld;"
-		"push edi;"
-		"push ecx;"
-		"xor eax, eax;"
-		"mov edi, %1;"
-		"mov ecx, 0xffff;"
-		"repnz scasb;"
-		"not cx;"
-		"dec cx;"
-		"movzx eax, cx;"
-		"mov %0, eax;"
-		"pop ecx;"
-		"pop edi;"
-		: "=r" (length)
-		: "r" (p_chars)
-		would have been nice if it worked.
-	);*/
+String String::Substring(int start_index, int end_index) const
+{
+	String result;
+
+	if (0 <= start_index && end_index <= n_length)
+	{
+		result.p_char_string = new char[end_index - start_index + 1];
+		for(int i = start_index; i < end_index; i++)
+		{
+			result.p_char_string[i - start_index] = p_char_string[i];
+		}
+		
+		result.p_char_string[end_index - start_index] = 0;
+	}
+	return result;
+}
+
+Array<String> String::Split() const
+{
+	Array<String> result;
+	
+	int current_start = -1;
+	
+	for(unsigned int i = 0; i < n_length; i++)
+	{
+		if(!IsWhitespace(p_char_string[i]) && current_start == -1)
+		{
+			current_start = i;
+		}
+		else if(current_start != -1 && IsWhitespace(p_char_string[i]))
+		{
+			result.append(Substring(current_start, i));
+			current_start = -1;
+		}
+	}
+	
+	return result;
+}

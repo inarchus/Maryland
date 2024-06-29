@@ -11,7 +11,9 @@ export CLANG_OBJECTS = user_interface.o kernel_c.o etui_object.o e_progress_bar.
 boot: link-file config.mk assemble $(CLANG_OBJECTS) 
 	ld -m elf_i386 --build-id=none -T link.ld $(ASSEMBLY_OBJECTS_REAL_MODE) $(ASSEMBLY_OBJECTS_PROTECTED) $(CLANG_OBJECTS) -o boot.elf
 	objcopy -O binary boot.elf boot.bin
-	qemu-img convert -f raw boot.bin -O qcow2 boot.bin boot.qcow2
+#	qemu-img convert -f raw boot.bin -O qcow2 boot.bin boot.qcow2
+	@cp boot.bin floppy.vfd
+	@truncate -s 1474560 floppy.vfd
 	@stat boot.bin | grep "Size:"
 
 link-file: makefile
@@ -67,7 +69,7 @@ cpuid.o: cpuid.asm
 clean:
 	rm *.o boot.bin
 run:
-	qemu-system-i386 -fda boot.qcow2 -hda $(PATH_TO_VMDK_HDA) -boot order=a -cpu pentium3,sse=on -k en-us -vga std
+	qemu-system-i386 -drive file=floppy.vfd,index=0,if=floppy,format=raw -hda $(PATH_TO_VMDK_HDA) -boot order=a -cpu pentium3,sse=on -k en-us -vga std
 # -D qemu_i386.log -d cpu ; we want to turn logging on but this is too much info.  
 run64:
 	qemu-system-x86_64 -fda boot.qcow2 -hda $(PATH_TO_VMDK_HDA) -cpu Nehalem,sse2=on

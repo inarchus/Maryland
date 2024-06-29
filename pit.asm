@@ -29,10 +29,18 @@ extern pit_interrupt_irq0
 extern print_hex_word
 extern print_hex_dword
 extern pit_interrupt_table_entry
+extern pit_set_print
 
 extern set_interrupt_callback
 
 section .text
+
+pit_set_print:
+	push ecx
+	mov ecx, [esp + 8]			; first argument is at +8 because return address is +4.  
+	mov byte [pit_print], cl
+	pop ecx
+	ret
 
 pit_interrupt_irq0:
 	push eax
@@ -40,11 +48,15 @@ pit_interrupt_irq0:
 	push esi
 	
 	inc dword [current_tick]
+	
+	test byte [pit_print], 1
+	jz .bypass_pit_print
 	mov dx, 0x1840
 	push ecx
 	mov ecx, [current_tick]
 	call print_hex_dword
 	pop ecx
+	.bypass_pit_print:
 	
 	; end of interrupt
 	mov al, 0x20
@@ -109,4 +121,5 @@ read_pit:
 
 
 section .data
-	current_tick dd 0
+	current_tick 	dd 0
+	pit_print		db 0x01

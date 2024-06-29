@@ -3,7 +3,7 @@ Development Journal body { font-family: "Verdana"; } section { width: 50%; margi
 18 June 2024
 ============
 
-Beginning of Journal: I want to write this so that I can recall my thoughts and steps along the way, given that this development is being done without any real knowledge of how to do any of it, figuring it out along the way. I've been working on this for about a month, though Lisa's wedding got in the way and I had to take some time off from it.
+Beginning of Journal: I want to write this so that I can recall my thoughts and steps along the way, given that this development is being done without any real knowledge of how to do any of it, figuring it out along the way. I've been working on this for about a month.
 
 Wrong Addressing for Segments
 -----------------------------

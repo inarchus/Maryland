@@ -113,7 +113,7 @@ bool Array<t>::exists(const t & item)
 {
 	for(unsigned int i = 0; i < n_size; i++)
 	{
-		if(p_array[i] == t)
+		if(p_array[i] == item)
 			return true;
 	}
 	return false;
@@ -124,7 +124,7 @@ unsigned int Array<t>::find_index(const t & item)
 {
 	for(unsigned int i = 0; i < n_size; i++)
 	{
-		if(p_array[i] == t)
+		if(p_array[i] == item)
 			return i;
 	}
 	return 0xffffffff;

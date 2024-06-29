@@ -11,7 +11,9 @@ class EFrame : public ETUIObject
 		EFrame();
 		bool addChild(ETUIObject * p_object);
 		bool removeChild(ETUIObject * p_object);
-
+		
+		void drawBackground();
+		virtual void drawBorder();
 		virtual void redraw();
 
 	private:

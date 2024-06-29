@@ -18,6 +18,7 @@ I am using WSL2/Ubuntu to build so I assume that most versions of linux should b
 	* apt install qemu-system-x86
 	* I use both qemu-system-i386 which almost seems partially deprecated on their documentation but still works, and qemu-system-x86 for emulation for core2/nehalem.
 *	make: Nothing complex here, not using any super-advanced build tools as they are not yet necessary.  
+*	python3: as long as you're on an ubuntu installation it will come with it, but otherwise you'll need it.  There is a python script which generates the link.ld file for us, so that we don't need to rely on doing it manually, which caused me many problems.  
 *	Clone the repository.
 	
 Create your config.mk

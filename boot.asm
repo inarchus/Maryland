@@ -3,8 +3,8 @@ global start
 
 section .text
 
-kernel_segment 		equ 0x0700
-load_address 		equ 0x1000
+kernel_segment 		equ 0x0800
+load_address 		equ 0x0000
 secondary_offset	equ 0x3000
 temp_load_address 	equ 0x7e00
 
@@ -54,14 +54,15 @@ start:
 	mov bx, load_address		; bx contains the location to write in the segment es:bx
 	int 0x13	 				; read from floppy disk drive
 	
-	;; we're going to read a second track of sectors in order to make sure we have enough space since we're running a little low in protected mode.  
+	; we're going to read a second track of sectors in order to make sure we have enough space since we're running a little low in protected mode.  
 	; super confusing...  we should try to do an LBA read rather than this CHS nonsense.  it's causing a huge number of problems for us.  
-	;; ok i think we've gained some understanding... I think that it alternates heads between tracks, so the next thing is at track 1.  Now... why the living shit did that work reading from sector 3?
-	mov ax, 0x0212				; read from floppy ah = 2 - all eighteen sectors al = 0x12, starts at sector 2 for whatever reason
-	mov dx, 0x0100 				; [dh = head, dl = fda]		; read the back side of the disk, why? shouldn't it be stored on sector 2? or does it go t1h0 t1h1...? that's what it seems like
-	mov cx, 0x0004				; [ch = track 1 (0 indexed), cl = sector 1 (1-indexed)], why is it not at sector 1 ?
-	mov bx, 0x3000				; 0x3000 + 0x7000 = 0xa000
-	;int 0x13	 				; read from floppy disk drive
+	; when we exceed 18432 bytes we have to load from track 1, starting at sector 2.  I don't know why we do that, it seems like sector 1 has a duplicate bit of data to track 0. 
+	; it's different now between the 1.44 MB floppy emulation in VMWare and the 2.88 MB of qemu.  
+	mov ax, 0x021c				; read from floppy ah = 2 - all eighteen sectors al = 0x12, starts at sector 2 for whatever reason
+	mov dx, 0x0000 				; [dh = head, dl = fda]		
+	mov cx, 0x0101				; [ch = track 1 (0 indexed), cl = sector 1 (1-indexed)], why is it not at sector 1 ?
+	mov bx, 0x4400				; 0x3000 + 0x7000 = 0xa000
+	int 0x13	 				; read from floppy disk drive
 	
 	xor ax, ax
 	mov es, ax

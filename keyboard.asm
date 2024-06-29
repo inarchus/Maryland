@@ -12,6 +12,7 @@ extern getchar
 extern getchar_pressed
 extern ps2_keyboard_irq1
 extern keyboard_flags
+extern set_getchar_print
 
 ; from kernel.asm
 extern display_hex_byte
@@ -26,6 +27,13 @@ section .text
 
 E0_EXTENDED_CODE 	equ 	0x01
 E1_EXTENDED_CODE 	equ		0x02
+
+set_getchar_print:
+	push ecx
+	mov ecx, [esp + 8]				; take the first argument.
+	mov byte [getchar_print], cl
+	pop ecx
+	ret
 
 ps2_keyboard_irq1:
 	cli
@@ -172,8 +180,6 @@ getchar_pressed:
 	cmp al, 0x80		; probably should set the 0x02 flag in ah but we'll fix that later as usual
 	jae getchar_pressed ; this is an F1-F12 key, or some other key which is not translatable into ascii
 	
-
-	
 	ret
 	
 getchar:
@@ -182,6 +188,19 @@ getchar:
 	push ebp
 	mov ebp, esp
 	sub esp, 8
+	
+	;push ecx
+	;push eax
+	;push edx
+	;mov al, byte [getchar_print]
+	;mov edx, 0x1810
+	;call display_hex_byte
+	;mov ecx, getchar_print
+	;mov edx, 0x1820
+	;call print_hex_dword
+	;pop edx
+	;pop eax
+	;pop ecx
 	
 	.wait_for_char:
 		call wait_for_scancode
@@ -196,17 +215,12 @@ getchar:
 	;; displays
 	push edx
 	
-	mov edx, 0x1808
-	call display_hex_byte
+	test byte [getchar_print], 0x01
+	jz .bypass_getchar_scancode_print
+		mov edx, 0x1808
+		call display_hex_byte
+	.bypass_getchar_scancode_print:
 	
-	push ecx
-	mov ecx, dword [ebp - 4]
-	mov edx, 0x180c
-	call print_hex_dword
-	pop ecx
-	pop edx
-	;; end displays
-
 	;; test to see if the code is 0xE1 or 0xE0
 	cmp al, 0xe0
 	je .check_single_extended_codes
@@ -228,10 +242,14 @@ getchar:
 	mov al, [single_scan_code_map + ebx]	; get the ascii code or special code
 	call shift_translate					; tests for the shift code and does all shift translations.
 
+	test byte [getchar_print], 0x02
+	jz .bypass_getchar_ascii_print
 	push edx
 	mov edx, 0x1800
 	call display_hex_byte
 	pop edx
+	.bypass_getchar_ascii_print:
+	
 	mov dword [getchar_val], eax
 	jmp .getchar_exit
 	
@@ -434,12 +452,13 @@ check_control_keys:
 section .data
 	%include "ps2map.asm"
 	keyboard_flags 			dw 0x0000 ; [ - - - - - CAPL SCRL ] [-, -, RALT, LALT, RCTRL, LCTRL, RSHIFT, LSHIFT] ; where to put insert?
-	queue_write_index		db 0x0
-	queue_read_index		db 0x0
-	raw_scancode_write		db 0x0
-	raw_scancode_read		db 0x0
-	start_process_raw_scwr	db 0x0
-	getchar_val				dd 0x0
+	queue_write_index		db 0x00
+	queue_read_index		db 0x00
+	raw_scancode_write		db 0x00
+	raw_scancode_read		db 0x00
+	getchar_val				dd 0x0000_0000
+	start_process_raw_scwr	dw 0x00
+	getchar_print			dw 0x03		; [- - - - | - - ascii scan]
 section .bss
 	scancode_queue			resq 256
 	raw_scancode_buffer		resb 256	; just let it overflow...  

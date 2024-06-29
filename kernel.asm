@@ -233,7 +233,7 @@ getline:
 		cmp al, 0x0a
 		je getline_return
 		stosb
-		pop edx 
+		pop edx
 		push edx
 		call printchar
 		pop edx

@@ -29,6 +29,11 @@ bool String::IsWhitespace(char x) const
 	return x == ' ' || x == '\n' || x == '\r' || x == '\t';
 }
 
+char & String::operator [] (int index) const
+{
+	return p_char_string[index];
+}
+
 String & String::Concatenate(const String & rhs)
 {
 	char * new_string = new char[n_length + rhs.n_length + 1];
@@ -94,11 +99,6 @@ String & String::Lower()
 		}
 	}	
 	return *this;
-}
-
-inline unsigned int String::Length() const
-{
-	return n_length;
 }
 
 String & String::operator = (const String & rhs)

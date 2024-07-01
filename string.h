@@ -18,11 +18,12 @@ class String
 		String & Lower();
 		Array<String> Split() const; 
 		String Substring(int start_index, int end_index) const;
-		inline unsigned int Length() const;
+		inline unsigned int Length() const { return n_length; }
 		String & operator = (const String & rhs);
 		bool operator == (const String & rhs) const;
 		String operator + (const String & rhs);
 		String & operator += (const String & rhs);
+		char & operator [] (int index) const;
 		bool IsWhitespace(char x) const;
 		~String();
 	private:

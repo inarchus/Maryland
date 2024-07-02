@@ -6,7 +6,7 @@ include config.mk
 
 export ASSEMBLY_OBJECTS_REAL_MODE = boot.o secondary.o 
 export ASSEMBLY_OBJECTS_PROTECTED = kernel.o pit.o pic8259.o interrupts.o memory.o floppy_driver.o rtc.o ata.o cpuid.o keyboard.o
-export CLANG_OBJECTS = user_interface.o kernel_c.o etui_object.o e_progress_bar.o memory_c.o string.o e_frame.o e_button.o e_text_input.o e_text_display.o 
+export CLANG_OBJECTS = user_interface.o kernel_c.o etui_object.o e_progress_bar.o memory_c.o string.o e_frame.o e_button.o e_text_input.o e_text_display.o msfat.o ata_c.o
 
 boot: link-file config.mk assemble $(CLANG_OBJECTS) 
 	ld -m elf_i386 --build-id=none -T link.ld $(ASSEMBLY_OBJECTS_REAL_MODE) $(ASSEMBLY_OBJECTS_PROTECTED) $(CLANG_OBJECTS) -o boot.elf
@@ -41,8 +41,14 @@ memory_c.o: memory.cpp memory.h
 	clang $(CLANG_FLAGS) -c memory.cpp -o memory_c.o
 string.o: string.h string.cpp
 	clang $(CLANG_FLAGS) -c string.cpp -o string.o
+ata_c.o:
+	clang $(CLANG_FLAGS) -c ata.cpp -o ata_c.o
+msfat.o: msfat.h msfat.cpp
+	clang $(CLANG_FLAGS) -c msfat.cpp -o msfat.o
 
 assemble: $(ASSEMBLY_OBJECTS_REAL_MODE) $(ASSEMBLY_OBJECTS_PROTECTED) 
+	
+memory.o: memory.asm
 	$(ASSEMBLER) -f $(ASM_FLAGS) memory.asm -o memory.o
 keyboard.o: keyboard.asm ps2map.asm
 	$(ASSEMBLER) -f $(ASM_FLAGS) keyboard.asm -o keyboard.o

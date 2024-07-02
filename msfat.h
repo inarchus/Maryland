@@ -1,6 +1,9 @@
 #ifndef __MSFAT_H__
 #define __MSFAT_H__
 
+#include "string.h"
+#include "ata.h"
+
 /*
 
 	Implementation of the FAT32 standard, and perhaps Fat 12 and 16 if we have the time and get 32 working.  
@@ -20,9 +23,16 @@ namespace msfat
 	typedef unsigned int dword;
 	typedef unsigned long long qword;
 
-	struct BootSector16
+	char FAT_STRING[9] = "FAT     "; // needs to be null terminated
+	#define FAT12_STRING "FAT12   "; // needs to be null terminated
+	#define FAT16_STRING "FAT32   "; // needs to be null terminated
+	#define FAT32_STRING "FAT32   "; // needs to be null terminated
+
+	struct BootSector {};
+
+	struct BootSector16 : public BootSector
 	{
-		BootSector() 
+		BootSector16() 
 			: reserved_1(0), signature(0xaa55)
 		{}
 		
@@ -52,13 +62,13 @@ namespace msfat
 		byte boot_code[448];		// MS specification says to set this to zero, but that would go against other parts of the documentation where it says this is where to store the boot code.  
 		word signature;
 		
-		static char fat_12[8] = "FAT12   ";
-		static char fat_16[8] = "FAT16   ";
+		static char fat_12[9];
+		static char fat_16[9];
 	};
-	
-	struct BootSector32
+
+	struct BootSector32 : public BootSector
 	{
-		BootSector() 
+		BootSector32() 
 			: reserved_1(0), fat_size_16(0), signature(0xaa55)
 		{}
 		
@@ -79,7 +89,6 @@ namespace msfat
 		word num_heads; 			// number of heads as described in the interrupt 0x13
 		dword num_hidden_sectors;	// Count of hidden sectors preceding the partition that contains this FAT volume. This field is generally only relevant for media visible on interrupt 0x13.
 		dword total_sectors_32;		// 32 bit count of the number of total sectors on the volume.
-		byte drive_number;			// set to either 0x80 or 0x00 depending on int 0x13
 		// byte 36 where it diverges from the 12/16 style boot sector.  
 		dword fat_size_32;			// number of sectors occupied by one FAT.  , set the fat_size_16(0)
 		word extended_flags;		// 0-3 = zero based number of active FAT.  4-6 reserved, 7 = [0 = fat is mirrored at runtime into all fats, 1 = only one fat is active, referenced in 0-3]
@@ -100,8 +109,9 @@ namespace msfat
 		byte boot_code[420];		// MS specification says to set this to zero, but that would go against other parts of the documentation where it says this is where to store the boot code.  
 		word signature;
 		
-		static char fat_32[8] = "FAT     ";
+		static char fat_32[9];
 	};
+	
 	
 	/*
 		The FSInfo structure is only present on volumes formatted FAT32. The structure must be
@@ -135,7 +145,7 @@ namespace msfat
 	struct FileDescriptor
 	{
 		public:
-			File() : nt_reserved(0) {}
+			FileDescriptor() : nt_reserved(0) {}
 			
 			char name[11];
 			byte attributes;
@@ -157,11 +167,25 @@ namespace msfat
 		public:
 	};
 
+	class Directory
+	{
+		public:
+
+		private:
+			String path;
+			String name;
+			DirectoryDescriptor descriptor;
+			Array<String> subdirectories;
+			Array<String> files;
+	};
+	
+	class FileStream;
+
 	class FATPartition
 	{
 		public:
 			FATPartition();
-			byte FormatDrive(byte fat_type, dword cluster_count, word cluster_size, byte num_fat_tables, word reserved_size);
+			byte FormatDrive(byte fat_type, char * volume_name, byte * boot_sector_code, dword cluster_count, word cluster_size, byte num_fat_tables, word reserved_size, dword volume_id);
 			dword GetSectorCount() const;
 			
 			dword CreateFile(String path);
@@ -173,18 +197,23 @@ namespace msfat
 			
 			dword CreateDirectory();
 			dword DeleteDirectory();
+
+			dword ReadDirectoryStructure(String path, Directory & dir);
 			
 			FileStream & OpenFile(String path);
-			CloseFile(FileStream & fs);
+			byte CloseFile(FileStream & fs);
 			byte UpdateFreeCount();
 			
 		private:
-			byte CreateFileAllocationTable(fat_location, fat_table_sectors);
-		
+			byte CreateFileAllocationTable(dword fat_location, dword fat_table_sectors);
+			byte PopulateBootSector32(BootSector32 * boot_sector, char * volume_name, byte * boot_sector_code, dword cluster_count, dword cluster_size, dword num_fat_tables, dword reserved_size, dword volume_id);
+			byte PopulateBootSector16(BootSector16 * boot_sector, char * volume_name, byte * boot_sector_code, dword cluster_count, dword cluster_size, dword num_fat_tables, dword reserved_size, dword volume_id);
+			FileSystemInformation * PopulateFileSystemInfo(char * volume_name, byte * boot_sector, dword cluster_count, dword cluster_size, dword num_fat_tables, dword reserved_size, dword volume_id);
+
 			ATADrive * p_ata;
 			
-			static unsigned int system_sectors = 8;
-			static unsigned int sector_size = 512;
+			static unsigned int system_sectors;
+			static unsigned int sector_size;
 	};
 	
 	class FileStream 

@@ -2,6 +2,7 @@
 #define __ETUI_OBJECT__
 
 #include "../memory.h"
+#include "../string.h"
 
 enum EBorderType {borderless, single_line, double_line};
 
@@ -49,6 +50,7 @@ class ETUIObject
 		char border_symbol;
 		
 		void printToBuffer(int x_pos, int y_pos, char out_char, byte format);
+		void drawString(int x_pos, int y_pos, const String & the_string, byte format);
 		
 		// this is essentially for virtual functions.  
 		ETUIObject * base_pointer;

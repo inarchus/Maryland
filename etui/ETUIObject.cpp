@@ -1,4 +1,5 @@
 #include "ETUIObject.h"
+#include "../string.h"
 
 extern "C" void __fastcall print_hex_dword(unsigned int dword, unsigned int position);
 
@@ -28,8 +29,17 @@ void ETUIObject::SetParent(ETUIObject * p_new_parent)
 void ETUIObject::printToBuffer(int x_pos, int y_pos, char out_char, byte format)
 {
 	word * p_screen = (word*)0xb8000;
-	p_screen[x_pos * screen_width + y_pos] = (format << 8) | out_char;	
+	p_screen[(row_position + x_pos) * screen_width + (col_position + y_pos)] = (format << 8) | out_char;
 	print_hex_dword((dword)&screen_width, 0x0500);
+}
+
+void ETUIObject::drawString(int x_pos, int y_pos, const String & the_string, byte format)
+{
+	word * p_screen = (word*)0xb8000;
+	for(int i = 0; i < the_string.Length(); i++)
+	{
+		p_screen[(row_position + x_pos) * screen_width + (col_position + y_pos)] = (format << 8) | the_string[i];
+	}
 }
 
 /*

@@ -184,7 +184,6 @@ configure_interrupt_descriptor_table:
 	jnz define_fault_loop
 	
 	lidt [idt_desc_struct]				; load the struct describing the table
-	sti
 	
 	;; setting interrupt callbacks manually, once we implement enough of them we'll do it in a loop.  
 	
@@ -204,12 +203,14 @@ configure_interrupt_descriptor_table:
 	mov edx, ps2_keyboard_irq1		; not always enabled, must enable through the PIC
 	call set_interrupt_callback
 
+	sti
+
 	ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; set_interrupt_callback																			  ;;;; 	
 ;;;; 	This interrupt should be called when we don't have an interrupt for a specific PIC controller ;;;; 	
-;;;;																 								  ;;;; 	
+;;;;		NOTE: This function will no longer re-enable the interrupt flags so that we can do that   ;;;; 	
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 set_interrupt_callback:
 	; fastcall so ecx should have the interrupt number, edx will have the callback pointer
@@ -232,7 +233,6 @@ set_interrupt_callback:
 	pop edx
 	pop edi
 	
-	sti
 	ret
 
 section .data

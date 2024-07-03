@@ -94,7 +94,6 @@ configure_pit:
 	mov edx, pit_interrupt_irq0
 	call set_interrupt_callback
 	
-	sti		; as long as we mask the pit IRQ, this doesn't blow everything up.  
 	pop ecx
 	pop eax
 	pop edx

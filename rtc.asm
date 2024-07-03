@@ -40,8 +40,8 @@ rtc_enable:
 	mov ecx, 0x28						; set interrupt 0x20 + 0x8
 	mov edx, rtc_interrupt_irq8
 	call set_interrupt_callback
-
-	cli
+	
+	cli									; double check that interrupts are disabled
 	push edx
 	push eax
 	
@@ -68,8 +68,6 @@ rtc_enable:
 	
 	mov dword [rtc_time], 0
 	mov dword [rtc_time + 4], 0
-
-	sti
 
 	ret
 

@@ -34,7 +34,6 @@ extern extended_code_str
 extern single_scan_code_map
 extern getchar_pressed
 extern string_length
-extern main_shell
 extern printline
 extern printlinef
 extern printstr
@@ -55,6 +54,8 @@ extern hex_str_to_value
 extern display_hex_byte
 extern display_ascii_characters
 
+; from kernel.c
+extern main_shell
 ; from keyboard.asm 
 extern getchar
 extern getchar_pressed
@@ -73,6 +74,7 @@ extern configure_pit
 ; from pic8259.asm
 extern configure_pic
 extern display_pic_registers
+extern pic_word
 
 ; from interrupts.asm
 extern configure_interrupt_descriptor_table
@@ -97,21 +99,45 @@ kernel_entry:
 	mov esi, protected_mode_string
 	call printline
 	
+	; 1 means masked, 0 means unmasked so that interrupts can flow through from the IRQs.  
+	mov cx, 11111111_11111111b	; mask all of the bits so that all IRQs are now unable to activate
+	call configure_pic			
 	call configure_interrupt_descriptor_table		; calls lidt
 	; we can add some safety checks to determine if sse exists on the machine.  
 	call enable_sse			; currently really enabling MMX more than SSE, but we should see what is possible.  
-	
 	call configure_pit		; Programmable Interval Timer IRQ0
 	call rtc_enable			; Real Time Clock IRQ 8
 
 	; configure the PIC to use the PIT, Floppy Drive and RTC for now, add more features
-	mov cx, 11111110_10111000b	; this word allows us to set which irqs are enabled
+	;pic_word = 11111110_11111000b
+	mov cx, [pic_word]	; this word allows us to set which irqs are enabled
 	call configure_pic			; PICs allow IRQs to flow from hardware to the processor as interrupts
-
+	; I think that enabling interrupts while the pic wasn't configured properly could lead to an exception of some kind, maybe #GP
+	; I'm going to enable the interrupts here after we've done all of the configuration.  
+	sti							; I've removed the sti from configure_pit, configure_i.d.t, rtc_enable, configure_pic
 	call initialize_origin
-
 	push instring
 	call main_shell
+
+;; this will use the old style polling method instead of irq0 because we may not have it enabled yet.
+check_key_pressed:
+	push eax
+	.key_not_pressed_yet:
+		in al, 0x64				; is there a character to read?
+		test al, 1				
+	jz .key_not_pressed_yet
+
+	in al, 0x60
+	test al, 0x80			; this is a key release event
+	jnz .key_not_pressed_yet
+	
+	.read_scancode:
+		in al, 0x64				; is there a character to read?
+		test al, 1				
+		in al, 0x60
+	jnz .read_scancode
+	pop eax
+	ret
 
 clear_screen:
 	push ecx

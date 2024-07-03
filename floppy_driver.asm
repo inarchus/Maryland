@@ -81,6 +81,10 @@ extern print_hex_dword
 extern getchar_pressed
 extern pit_wait
 
+; from pic8259.asm
+extern configure_pic
+extern pic_word
+
 section .text
 extern fdisk_display_msr
 extern fdisk_init_controller
@@ -220,6 +224,11 @@ fdisk_init_controller:
 	mov edx, floppy_interrupt_irq6
 	call set_interrupt_callback
 
+	mov cx, [pic_word]
+	and cx, ~0x0040		; 40 = bit 6, floppy irq
+	call configure_pic
+	mov [pic_word], cx
+
 	push ebx
 	
 	call fdisk_verify_ready
@@ -257,6 +266,9 @@ fdisk_init_controller:
 	call fdisk_display_msr
 		
 	pop ebx
+	
+	sti
+	
 	ret
 	
 

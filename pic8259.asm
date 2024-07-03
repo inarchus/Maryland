@@ -12,10 +12,11 @@ PIC_MASTER_OFFSET equ	0x20		; in protected mode IRQ0-31 are reserved for process
 PIC_SLAVE_OFFSET  equ	0x28		; setting them to 32-47 will prevent this.  
 
 ; https://osdev.org/Interrupts#General_IBM-PC_Compatible_Interrupt_Information
-PIC_MASTER_MASK   equ	10111110b
-PIC_SLAVE_MASK	  equ   11101111b
+PIC_MASTER_MASK   equ	10111000b	; currently unused.  
+PIC_SLAVE_MASK	  equ   11101110b	;
 
 extern configure_pic
+extern pic_word
 extern display_pic_registers
 
 section .text
@@ -55,7 +56,6 @@ configure_pic:
 	pop eax
 	pop edx	
 	
-	sti
 	ret
 	
 send_pic_word:
@@ -84,5 +84,5 @@ display_pic_registers:
 	ret
 	
 section .data
-
+	pic_word	dw		11111110_11111000b		; starts out with pit, keyboard, cascade, rtc unmasked, all others masked
 section .bss

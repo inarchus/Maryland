@@ -23,7 +23,7 @@ init:
 	mov fs, ax
 	mov gs, ax
 	mov ss, ax
-	mov sp, 0x6fff ; set up the stack so that it can descend.  
+	mov sp, 0x6ffe ; set up the stack so that it can descend.  
 	
 	mov di, new_string
 	xor dx, dx
@@ -247,32 +247,38 @@ measure_low_memory:
 		
 	ret
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;	enter_protected_mode																;;;;
+;;;;	This function does five things, enables the a20 memory line, disables interrupts,	;;;;
+;;;;		loads the general descriptor table (where the 32-bit segments live),			;;;;
+;;;;		then we enable the protected mode bit in the cr0 control register, 				;;;;
+;;;;		and finally it will jump to the correct location of the new kernel.  			;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 enter_protected_mode:
+	; disable non-maskable interrupts, port 70 is for NMI and shared with the CMOS RAM/RTC
+	; this wasn't necessary on virtualization alone, but on a real system without it, an NMI may trigger a reboot.
+	in al, 0x70
+	or al, 0x80
+	out 0x70, al
+	in al, 0x71	
+	
+	; the a20 line is the 20th (0-indexed) address line, disabled in 16-bit real mode by default
 	call a20_verify
 	test ax, ax
-	jnz epm_pass_a20_enable
+	jnz .bypass_a20_enable
 	call a20_enable
-	epm_pass_a20_enable:
+	.bypass_a20_enable:
 	
-	cli ; disable interrupts
-	
-	; call get_char	
-	;mov eax, gdt_end
-	xor ax, ax
-	mov ds, ax
-	lgdt [gdt_end]
-	
-	; call get_char
+	cli 	; disable interrupts, if interrupts are enabled, they could trigger before the IDT is set up.
+	; load the general descriptor table
+	lgdt [gdt_struct]
+	; set protected mode enable in cr0
 	mov eax, cr0
 	or al, 1
 	mov cr0, eax
-	
-	; call get_char
+	; jump to the 32 bit code, perform a far jump which resets the IP to a 32 bit mode.  	
 	jmp 0x8:kernel_entry
-	
-	enter_protected_mode_return:
-	ret
+	;;; end of function, no return ;;;
 
 get_char:
 	wait_for_a1:		; waiting for the a character (probably could make it the same position since it is)
@@ -1222,7 +1228,7 @@ section .data
 			db 10010011b		; access bits
 			db 1111_1100b		; low nibble = flags, high nibble = more of the limit
 			db 0x0 				; high part of the base
-		gdt_end:
+		gdt_struct:
 			gdtable_size 	dw 		$ - gdtable - 1 		; limit (Size of GDT)
 							dd 		gdtable
 

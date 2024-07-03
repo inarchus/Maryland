@@ -114,6 +114,13 @@ Current Goals
 * 	Provide programs with interrupts to make system calls back to kernel mode.  
 *	Write the Readme with build instructions. 
 
-27 June 2024
+2 July 2024
 =============
+In the intervening time I've been working on the FAT32 file system which is about 50% finished and the TUI which is probably 25% finished.  But I've been working for the past few days on my old pentium 4 computer getting it back into working condition, and I've been successful in loading the bootloader first and second stages, and it will jump to the kernel and give a #GP fault, I was even able to have it print that to me before promptly dying.  
+
+I went back and removed the sti instruction from all of the configuration setup in order to only call it once we are ready to actually handle interrupts.  None of the emulators produce this issue and I'm curious what the problem is.  The floppy drive does not like to write to the disks that I have, meaning either that the disks are all bad or possibly the floppy drive is having write issues.  Either way, I need to come up with a better system for getting the OS into a floppy and then onto the bare metal for actual testing.  I will probably attempt again tomorrow to write the floppy with the newest version of the OS and try again.  It could also be the floppy drive itself generating IRQ6 which may not be set immediately and the floppy IRQ is allowed.   
+
+That's all fixed just now, but the real problem is that when I hexdump a000 in real mode and it should have loaded most of the kernel off the bat, it definitely hasn't done so. Yet more problems with floppy head, track and sector indexing.  This time it's different in QEMU vs a real floppy drive, because I know the data is on the floppy after dumping it back. 
+
+Ok, I've bodged the rest of the tracks and sectors together and loaded them at boot.  Amazingly I've been able to get the current version working (with the exception for whatever reason of the RTC) on my pentium 4 downstairs.  This for me is a great accomplishment, since the real metal was more finicky than all of the emulations.  Even though it's cost me a few days of forward progress on the underlying software, actually running it on a real computer is probably a good sacrifice of time. As I say, the real time clock doesn't work.  You may ask why and I don't know yet, it may have to do with the fact that I pulled the CR2032 battery while I was trying to get the computer to boot again after repeatedly installing a bad ram stick in many different configurations.  But when it's powered on, it shouldn't need the battery, right? We'll find out.
 

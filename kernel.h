@@ -32,7 +32,7 @@ extern unsigned int chex_to_number(char * p_string);
 extern unsigned int startswith(char * big_string, char * test_string);
 extern void print_string(char * out_string, unsigned int position);
 extern char nibble_to_hexchar(unsigned char nibble, unsigned char upper_case);
-extern __fastcall unsigned int hex_str_to_value(char * p_string);
+extern  unsigned int __fastcall hex_str_to_value(char * p_string);
 extern void __fastcall print_hex_byte(unsigned char byte, unsigned int position);
 extern void __fastcall print_hex_word(unsigned short word, unsigned int position);
 extern void __fastcall print_hex_dword(unsigned int dword, unsigned int position);

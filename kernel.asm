@@ -11,11 +11,9 @@
 ; shift + space doesn't seem to work, keypad enter isn't working perfectly either.  F[i] keys not implemented
 ; get gdb + qemu working for faster debugging
 ; figure out how to control where on the floppy everything goes.  
-;	try to get PIO working for the floppy drive read command as well, bypass the need for DMA
-; 	add support for floppy controller version 0x81 rather than 0x90 described on osdev.net [no idea where to find documentation for that]
-; 	
 ;	here's a list of QEMU options that seems to be not documented in the official QEMU site anymore
 ;	https://qemu.weilnetz.de/w32/2012/2012-12-04/qemu-doc.html
+
 [bits 32]
 
 extern empty_string
@@ -92,7 +90,8 @@ kernel_entry:
 	mov fs, ax
 	mov gs, ax
 	mov ss, ax
-
+	
+	call configure_vga
 	call clear_screen
 	
 	xor dx, dx
@@ -108,16 +107,45 @@ kernel_entry:
 	call configure_pit		; Programmable Interval Timer IRQ0
 	call rtc_enable			; Real Time Clock IRQ 8
 
-	; configure the PIC to use the PIT, Floppy Drive and RTC for now, add more features
+	; configure the PIC to use the PIT, keyboard and RTC for now, floppy starts disabled until init
 	;pic_word = 11111110_11111000b
 	mov cx, [pic_word]	; this word allows us to set which irqs are enabled
 	call configure_pic			; PICs allow IRQs to flow from hardware to the processor as interrupts
 	; I think that enabling interrupts while the pic wasn't configured properly could lead to an exception of some kind, maybe #GP
 	; I'm going to enable the interrupts here after we've done all of the configuration.  
 	sti							; I've removed the sti from configure_pit, configure_i.d.t, rtc_enable, configure_pic
-	call initialize_origin
-	push instring
+	call initialize_origin		; initialize the start of virtual memory
+	push instring				
 	call main_shell
+
+
+; the goal of this function is to turn of the blink on some operating systems so that all colors are possible as background
+configure_vga:
+	mov dx, 0x3da	
+	in al, dx
+
+	mov dx, 0x3c0		; vga register index port
+	mov al, 0x10 | 0x20	; read attribute mode control register (index 0x10)
+	out dx, al
+	
+	mov dx, 0x3c1		; go to the vga dataio port
+	in al, dx			; get the value in the register
+	and al, ~0x08		; bit 3 is the blink, turn it off so we have all the proper colors
+	push eax
+	
+	mov dx, 0x3da
+	in al, dx
+
+	mov dx, 0x3c0		; vga register index port
+	mov al, 0x10 | 0x20	; read attribute mode control register (index 0x10)
+	out dx, al
+	
+	pop eax
+	out dx, al
+	
+	mov dx, 0x3da
+	in al, dx
+	ret
 
 ;; this will use the old style polling method instead of irq0 because we may not have it enabled yet.
 check_key_pressed:

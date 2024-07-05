@@ -9,7 +9,7 @@ secondary_offset	equ 0x3000
 temp_load_address 	equ 0x7e00
 
 start:
-	cli
+	cli							; suppress interrupts
 	xor ax, ax
 	mov ss, ax
 	mov bp, ax
@@ -26,8 +26,8 @@ start:
 	mov ah, 1
 	int 0x10
 	
-	mov bx, out_string
-	mov al, byte [bx]
+	mov bx, out_string			; what does this even do?
+	mov al, byte [bx]			; huh?
 	xor di, di
 	mov ah, 0x02 				; set cursor position
 	xor bh, bh   				; graphics mode (set to zero for now)

@@ -37,11 +37,12 @@ extern rtc_toggle_display
 section .text
 
 rtc_enable:
+	cli									; double check that interrupts are disabled
+	
 	mov ecx, 0x28						; set interrupt 0x20 + 0x8
 	mov edx, rtc_interrupt_irq8
 	call set_interrupt_callback
 	
-	cli									; double check that interrupts are disabled
 	push edx
 	push eax
 	
@@ -49,16 +50,16 @@ rtc_enable:
 	mov al, 0x8b						; select status register B + disable NMI = 0x80
 	out dx, al
 	
-	inc dx
+	inc dx	; port 0x71
 	in al, dx
 	
 	push eax
 	
-	dec dx
+	dec dx ; port 0x70
 	mov al, 0x8b
 	out dx, al
 	
-	inc dx
+	inc dx ; port 0x71
 	pop eax
 	or al, 0x40							; enable the IRQ8
 	out dx, al					
@@ -180,36 +181,32 @@ rtc_interrupt_irq8:
 	push edx
 
 	test byte [rtc_display_byte], 1
-	jz irq8_bypass_display
+	jz .bypass_display
 
 	cmp dword [rtc_current_tick_low], 0xffffffff
-	jne irq8_bypass_increment_high_word
+	jne .bypass_increment_high_word
 	
 	inc dword [rtc_current_tick_high]
 	mov dword [rtc_current_tick_low], 0xffffffff
 	
-	irq8_bypass_increment_high_word:
+	.bypass_increment_high_word:
 	inc dword [rtc_current_tick_low]	
 	
 	mov ebx, [rtc_current_tick_low]
 	and ebx, 0x000001ff
-	jnz irq8_bypass_display
+	jnz .bypass_display
 	
 	push ecx
-	;mov ecx, [rtc_current_tick_low]
-	;mov dx, 0x1832
-	;call print_hex_dword
-	
 	
 	mov cx, 0x1828
 	call rtc_display_datetime
 	pop ecx	
 	
-	irq8_bypass_display:
+	.bypass_display:
 	
-	mov al, 0x20
-	out 0xa0, al
-	out 0x20, al
+	mov al, 0x20		; EOI = end of interrupt
+	out 0xa0, al		; send to the slave pic
+	out 0x20, al		; send to the master
 
 	mov al, 0x0c		; must read the C register or else it won't call again
 	mov dx, 0x70		; cannot just set the interrupt as cleared

@@ -2,6 +2,7 @@
 #define __MSFAT_H__
 
 #include "string.h"
+#include "array.h"
 #include "ata.h"
 
 /*
@@ -23,7 +24,6 @@ namespace msfat
 	typedef unsigned int dword;
 	typedef unsigned long long qword;
 
-	char FAT_STRING[9] = "FAT     "; // needs to be null terminated
 	#define FAT12_STRING "FAT12   "; // needs to be null terminated
 	#define FAT16_STRING "FAT32   "; // needs to be null terminated
 	#define FAT32_STRING "FAT32   "; // needs to be null terminated
@@ -186,7 +186,7 @@ namespace msfat
 		public:
 			FATPartition();
 			byte FormatDrive(byte fat_type, char * volume_name, byte * boot_sector_code, dword cluster_count, word cluster_size, byte num_fat_tables, word reserved_size, dword volume_id);
-			dword GetSectorCount() const;
+			inline dword GetSectorCount() const { return q_sectors; }
 			
 			dword CreateFile(String path);
 			dword WriteFile(String path);
@@ -203,14 +203,16 @@ namespace msfat
 			FileStream & OpenFile(String path);
 			byte CloseFile(FileStream & fs);
 			byte UpdateFreeCount();
-			
+			// this function adds a and b, wow.  it's a test to see if we can write an assembly function which essentially "externs" a method of a class.  I think it worked?
+			dword ExperimentalFunction(dword a, dword b);
 		private:
-			byte CreateFileAllocationTable(dword fat_location, dword fat_table_sectors);
+			byte CreateFileAllocationTable(dword fat_location, dword fat_table_clusters, dword cluster_size);
 			byte PopulateBootSector32(BootSector32 * boot_sector, char * volume_name, byte * boot_sector_code, dword cluster_count, dword cluster_size, dword num_fat_tables, dword reserved_size, dword volume_id);
 			byte PopulateBootSector16(BootSector16 * boot_sector, char * volume_name, byte * boot_sector_code, dword cluster_count, dword cluster_size, dword num_fat_tables, dword reserved_size, dword volume_id);
-			FileSystemInformation * PopulateFileSystemInfo(char * volume_name, byte * boot_sector, dword cluster_count, dword cluster_size, dword num_fat_tables, dword reserved_size, dword volume_id);
-
+			byte PopulateFileSystemInfo(FileSystemInformation * p_fsi, dword cluster_count, dword cluster_size, dword num_fat_tables, dword reserved_size);
 			ATADrive * p_ata;
+
+			qword q_sectors;
 			
 			static unsigned int system_sectors;
 			static unsigned int sector_size;

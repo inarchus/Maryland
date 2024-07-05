@@ -1,5 +1,6 @@
 #include "user_interface.h"
 #include "etui/EFrame.h"
+#include "msfat.h"
 
 extern "C" dword eshell_entry(int rows, int cols);
 extern "C" void set_getchar_print(byte);
@@ -22,6 +23,9 @@ EShellTextUI::EShellTextUI(int rows, int cols, int color_bits)
 
 dword EShellTextUI::run()
 {
+	msfat::FATPartition fp;
+	fp.ExperimentalFunction(3, 6);
+	
 	set_getchar_print(0);
 	pit_set_print(0);
 	rtc_toggle_display();

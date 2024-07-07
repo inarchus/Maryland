@@ -1,0 +1,20 @@
+{
+  "total_sectors_16": 0,
+  "hidden_sectors": 0,
+  "heads": 16,
+  "cylinders": 81,
+  "total_sectors_32": 81648,
+  "extended_flags": 0,
+  "fsinfo_sector": 1,
+  "bytes_per_sector": 512,
+  "sectors_per_cluster": 1,
+  "reserved_sectors": 504,
+  "num_fa_tables": 1,
+  "fat32_table_size": 638,
+  "sectors_per_track": 63,
+  "root_cluster": 1150,
+  "bios_drive_number": "0x80",
+  "serial_number": "0x1b6e6",
+  "volume_name": "\"MARYLANDHDA\"",
+  "extended_boot_sig": "0x29"
+}

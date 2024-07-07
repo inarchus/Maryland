@@ -11,12 +11,14 @@
 [bits 16]
 [segment 0x8000]
 
+global bootloader_init
+
 extern kernel_entry
 extern string_length
 
 section .text
 
-init:
+bootloader_init:
 	xor ax, ax
 	mov es, ax
 	mov ds, ax
@@ -54,15 +56,15 @@ init:
 		mov si, halt_string
 		call startswith
 		test ax, ax
-		jnz end_program
+		jnz .end_program
 	
 		call menu_options
 	
 		jmp main_loop
 
-	end_program:
+	.end_program:
 		hlt
-		jmp init
+		jmp .end_program
 
 
 
@@ -260,7 +262,7 @@ enter_protected_mode:
 	in al, 0x70
 	or al, 0x80
 	out 0x70, al
-	in al, 0x71	
+	in al, 0x71		; I think the reason we read this is to allow the CMOS to restore its state to ready, it doesn't matter what the data is
 	
 	; the a20 line is the 20th (0-indexed) address line, disabled in 16-bit real mode by default
 	call a20_verify

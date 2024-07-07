@@ -13,3 +13,5 @@ config.mk
 *_REMOTE_*
 *_BASE_*
 *_BACKUP_*
+*_final.asm
+*.img

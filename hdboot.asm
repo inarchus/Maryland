@@ -46,7 +46,8 @@ section .data
 	sys_ready_len	equ $ - system_ready
 
 section .bpb_boot_sector
-	dw		0xeb5a					; jump to position 90 relative
+	db		0xeb					; jump relative
+	db 		0x5a					; position 90
 	db		0x90					; nop
 	db 		'MARYLAND'				; OEM Name identifier, 8 bytes
 	dw		{bytes_per_sector}		; bytes per sector

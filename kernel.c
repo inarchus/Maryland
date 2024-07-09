@@ -70,6 +70,10 @@ void main_shell(char * in_string)
 		{
 			ata_identify_drives();
 		}
+		else if(cstrings_equal(in_string, "ata test drive0"))
+		{
+			run_ata_test();
+		}
 		else if(cstrings_equal(in_string, "cpuid"))
 		{
 			display_cpuid();

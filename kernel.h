@@ -71,4 +71,6 @@ extern void cprint_hex_dword(unsigned int dword, unsigned int position);
 inline void cprint_hex_byte(unsigned char byte, unsigned int position);
 inline void cprint_hex_word(unsigned short word, unsigned int position);
 inline void cprint_hex_dword(unsigned int dword, unsigned int position);
+
+extern byte run_ata_test();
 #endif 

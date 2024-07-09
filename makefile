@@ -15,14 +15,22 @@ fdd: link-file config.mk assemble $(CLANG_OBJECTS)
 	@truncate -s 1474560 floppy.vfd
 	@stat boot.bin | grep "Size:"
 
-hdd: hdboot.o fsi_info.o assemble $(CLANG_OBJECTS)
-	ld -m elf_i386 --build-id=none -T hdd_boot_sector.ld hdboot.o -o hdboot.elf
-	ld -m elf_i386 --build-id=none -T fsi_info.ld fsi_info.o -o fsi_info.elf
-	ld -m elf_i386 --build-id=none -T hdd_link.ld secondary.o $(ASSEMBLY_OBJECTS_PROTECTED) $(CLANG_OBJECTS) -o hdd_kernel.elf
-	objcopy -O binary hdboot.elf hdboot.bin
-	objcopy -O binary fsi_info.elf fsi_info.bin
-	objcopy -O binary hdd_kernel.elf hdd_kernel.bin
+hdd: hdboot fsi_info hdd_kernel assemble $(CLANG_OBJECTS)
 	python image_virtual_drive.py $(PATH_TO_VMDK_HDA_DATA) drive_image.json
+	@stat hdd_kernel.bin | grep "Size:"
+
+hdboot: hdboot.o hdd_boot_sector.ld
+	ld -m elf_i386 --build-id=none -T hdd_boot_sector.ld hdboot.o -o hdboot.elf
+	objcopy -O binary hdboot.elf hdboot.bin
+
+fsi_info: fsi_info.o fsi_info.ld
+	ld -m elf_i386 --build-id=none -T fsi_info.ld fsi_info.o -o fsi_info.elf
+	objcopy -O binary fsi_info.elf fsi_info.bin
+
+hdd_kernel: secondary.o $(ASSEMBLY_OBJECTS_PROTECTED) $(CLANG_OBJECTS) hdd_link.ld
+	ld -m elf_i386 --build-id=none -T hdd_link.ld secondary.o $(ASSEMBLY_OBJECTS_PROTECTED) $(CLANG_OBJECTS) -o hdd_kernel.elf
+	objcopy -O binary hdd_kernel.elf hdd_kernel.bin
+
 
 link-file: makefile
 	python3 generate_link_file.py

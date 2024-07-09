@@ -28,14 +28,18 @@ ATAR_SEC_CYL_HIGH		equ 0x175		;
 ATAR_SEC_DRV_HEAD		equ 0x176		;
 ATAR_SEC_STATUS_CMD		equ 0x177		;
 
-
+; from kernel.asm
 extern printline
 extern printstrf
 extern printchar
 extern print_hex_byte
 extern print_hex_word
 extern print_hex_dword
+
+
 extern ata_identify_drives
+extern ata_identify_drive
+
 extern ata_display_status
 extern ata_read_sector_lba
 extern ata_write_sector_lba
@@ -318,7 +322,59 @@ ata_set_sector_counts:			; helper function to set the registers, call once for L
 		dec cl
 	jnz ata_read_set_reg_loop
 	ret
+
+ata_identify_drive:
+	;; ecx = controller << 1 | drive
+	;; edx = pointer to the data
+	push edx
 	
+	test cl, 0x02		; test to see if the controller is 1.  
+	jnz .set_secondary_drive_cmd
+	mov dx, ATAR_PRI_STATUS_CMD
+	jmp .bypass_secondary_drive_set
+	.set_secondary_drive_cmd:
+	mov dx, ATAR_SEC_STATUS_CMD
+	.bypass_secondary_drive_set:
+	
+	mov al, 0xec		; identify command
+	out dx, al
+	
+	in al, dx
+	test al, al
+	jnz .drive_exists
+	
+	xor eax, eax		; set eax to zero 
+	pop edx
+	
+	jmp .id_exit
+	
+	.drive_exists:
+	pop edx
+	
+	mov edi, edx
+	
+	test cl, 0x02
+	jnz .set_secondary_data
+	mov dx, ATAR_PRI_DATA0
+	jmp .bypass_secondary_data
+	.set_secondary_data:
+	mov dx, ATAR_SEC_DATA0
+	.bypass_secondary_data:
+	
+	mov cx, 0x100
+	.id_loop:
+		in ax, dx
+		stosw
+		dec cx
+	jnz .id_loop
+	
+	mov eax, 1
+	
+	.id_exit:
+	
+	ret
+
+
 ata_identify_drives:
 	
 	mov dx, ATAR_PRI_DRV_HEAD

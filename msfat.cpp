@@ -24,9 +24,13 @@ char BootSector16::fat_12[9] = FAT12_STRING;
 char BootSector16::fat_16[9] = FAT16_STRING;
 char BootSector32::fat_32[9] = FAT32_STRING;
 
-FATPartition::FATPartition()
+FATPartition::FATPartition(byte controller, byte drive)
+	: p_ata(new ATADrive(controller, drive))
 {
-	ExperimentalFunction(7, 7);
+	p_boot_sector = new BootSector32();
+	p_fsi = new FileSystemInformation();
+	p_ata->ReadSector(0, p_boot_sector);
+	p_ata->ReadSector(1, p_fsi);
 }
 
 /*
@@ -80,12 +84,7 @@ byte FATPartition::PopulateFileSystemInfo(FileSystemInformation * p_fsi, dword c
 	p_fsi->free_cluster_count = cluster_count - p_fsi->next_free_cluster; // same calculation. 
 	return 1;
 }
-/*
-byte FATPartition::ExperimentalFunction(dword a, dword b)
-{
-	return 3;
-}
-*/
+
 /*
 	FATPartition::FormatDrive
 	
@@ -126,9 +125,17 @@ byte FATPartition::FormatDrive(byte fat_type, char * volume_name, byte * boot_se
 		CreateFileAllocationTable(fat_location, fat_table_clusters, cluster_size);
 	}
 	
+	CreateRootDirectory();
+
 	delete [] p_boot_sector;
 	return 1;
 }
+
+byte FATPartition::CreateRootDirectory()
+{
+	return 0;
+}
+
 
 /*
 	FATPartition::CreateFileAllocationTable
@@ -150,5 +157,21 @@ byte FATPartition::CreateFileAllocationTable(dword fat_location, dword fat_table
 	delete [] zero_memory;
     return 1;
 }
-	
+
+dword FATPartition::CreateDirectory(String path)
+{
+	return 0;
+}
+
+dword FATPartition::DeleteDirectory(String path)
+{
+	return 0;
+}
+
+FATPartition::~FATPartition()
+{
+	delete p_boot_sector;
+	delete p_fsi;
+}
+
 }

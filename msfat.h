@@ -184,7 +184,7 @@ namespace msfat
 	class FATPartition
 	{
 		public:
-			FATPartition();
+			FATPartition(byte controller = 0, byte drive = 0);
 			byte FormatDrive(byte fat_type, char * volume_name, byte * boot_sector_code, dword cluster_count, word cluster_size, byte num_fat_tables, word reserved_size, dword volume_id);
 			inline dword GetSectorCount() const { return q_sectors; }
 			
@@ -193,10 +193,10 @@ namespace msfat
 			dword DeleteFile(String path);
 			dword ReadFile(String path);
 			
-			qword GetFileSize();
+			qword GetFileSize(String path);
 			
-			dword CreateDirectory();
-			dword DeleteDirectory();
+			dword CreateDirectory(String path);
+			dword DeleteDirectory(String path);
 
 			dword ReadDirectoryStructure(String path, Directory & dir);
 			
@@ -205,12 +205,18 @@ namespace msfat
 			byte UpdateFreeCount();
 			// this function adds a and b, wow.  it's a test to see if we can write an assembly function which essentially "externs" a method of a class.  I think it worked?
 			dword ExperimentalFunction(dword a, dword b);
+			~FATPartition();
 		private:
 			byte CreateFileAllocationTable(dword fat_location, dword fat_table_clusters, dword cluster_size);
 			byte PopulateBootSector32(BootSector32 * boot_sector, char * volume_name, byte * boot_sector_code, dword cluster_count, dword cluster_size, dword num_fat_tables, dword reserved_size, dword volume_id);
 			byte PopulateBootSector16(BootSector16 * boot_sector, char * volume_name, byte * boot_sector_code, dword cluster_count, dword cluster_size, dword num_fat_tables, dword reserved_size, dword volume_id);
 			byte PopulateFileSystemInfo(FileSystemInformation * p_fsi, dword cluster_count, dword cluster_size, dword num_fat_tables, dword reserved_size);
-			ATADrive * p_ata;
+
+			byte CreateRootDirectory();
+			ATADrive * p_ata; // drive that the partition lives on.
+
+			BootSector * p_boot_sector; 	// we'll read sector 0 and load the sector data here 
+			FileSystemInformation * p_fsi;	// we'll also load the file system information here so that we can
 
 			qword q_sectors;
 			

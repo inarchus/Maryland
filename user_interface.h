@@ -12,6 +12,7 @@ extern "C" void __fastcall print_hex_dword(unsigned int dword, unsigned int posi
 extern "C" void __fastcall hex_dump(unsigned char * starting_address);
 
 extern "C" dword eshell_entry(int rows, int cols);
+extern "C" byte run_ata_test();
 
 dword eshell_entry(int rows, int cols);
 

@@ -1,5 +1,6 @@
 #include "user_interface.h"
 #include "etui/EFrame.h"
+#include "ata.h"
 #include "msfat.h"
 
 extern "C" dword eshell_entry(int rows, int cols);
@@ -8,6 +9,27 @@ extern "C" void pit_set_print(byte);
 extern "C" void rtc_toggle_display();
 extern "C" byte getchar_pressed();
 
+byte run_ata_test()
+{
+	ATADrive c_drive(0, 0);
+	for(int row = 0; row < 16; row++)
+	{
+		for(int col = 0; col < 8; col++)
+		{
+			print_hex_dword(((dword *)c_drive.GetDriveData())[row * 8 + col], ((2 + row) << 8) + 9 * col);
+		}
+	}
+	getchar_pressed();
+	byte * data = new byte[512];
+	c_drive.ReadSector(0, data);
+	hex_dump(data);
+	getchar_pressed();
+	c_drive.ReadSector(1, data);
+	hex_dump(data);
+	delete [] data;
+
+	return 1;
+}
 
 dword eshell_entry(int rows, int cols)
 {
@@ -23,7 +45,7 @@ EShellTextUI::EShellTextUI(int rows, int cols, int color_bits)
 
 dword EShellTextUI::run()
 {
-	msfat::FATPartition fp;
+	msfat::FATPartition fp(0, 0);
 	fp.ExperimentalFunction(3, 6);
 	
 	set_getchar_print(0);

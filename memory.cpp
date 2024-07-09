@@ -154,10 +154,10 @@ void * allocate(std::size_t size)
 
 				}*/
 				//p_current->memory_records[i].p_dynamic->p_record = &(p_current->memory_records[i]);
-				cprint_hex_byte(i, 0x0610);
+				//cprint_hex_byte(i, 0x0610);
 				// we have to return the actual memory back to the user rather than the pointer to the memory block itself.  
-				cprint_hex_dword(0xababcdcd, 0x0300);
-				cprint_hex_dword((unsigned long)(p_current->memory_records[i].p_dynamic + sizeof(MemoryRecord *)), 0x0310);
+				//cprint_hex_dword(0xababcdcd, 0x0300);
+				//cprint_hex_dword((unsigned long)(p_current->memory_records[i].p_dynamic + sizeof(MemoryRecord *)), 0x0310);
 				return ((byte *)p_current->memory_records[i].p_dynamic + sizeof(MemoryRecord *));
 			}
 			else if (p_current->memory_records[i].length == 0) // zero means that the length is not determined yet.  
@@ -168,8 +168,8 @@ void * allocate(std::size_t size)
 				}
 				else
 				{
-					cprint_hex_dword(0xaaaabbbb, 0x0300);
-					cprint_hex_dword((unsigned long)p_dynamic_memory_current, 0x0310); // correct
+					//cprint_hex_dword(0xaaaabbbb, 0x0300);
+					//cprint_hex_dword((unsigned long)p_dynamic_memory_current, 0x0310); // correct
 					// allocate a new block at the end of the currently allocated MemoryBlock
 					p_current->memory_records[i].length = size;
 					p_current->memory_records[i].p_dynamic = (DynamicMemory *)p_dynamic_memory_current;
@@ -177,10 +177,10 @@ void * allocate(std::size_t size)
 					// there is no need to assign ->p_memory because the memory follows the p_record consecutively.  
 					p_current->memory_records[i].flags |= MEMORY_ALLOCATED;
 					p_dynamic_memory_current += (size + sizeof(MemoryRecord *));
-					cprint_hex_dword((unsigned long)p_dynamic_memory_current, 0x0320); // correct
-					cprint_hex_dword((unsigned long)p_current->memory_records[i].p_dynamic, 0x0330); // correct
-					cprint_hex_dword((unsigned long)((byte *)p_current->memory_records[i].p_dynamic + sizeof(MemoryRecord*)), 0x0340); // magically incorrect...? sizeof(MemoryRecord *)
-					cprint_hex_dword((unsigned long)sizeof(MemoryRecord *), 0x0240); // correct
+					// cprint_hex_dword((unsigned long)p_dynamic_memory_current, 0x0320); // correct
+					// cprint_hex_dword((unsigned long)p_current->memory_records[i].p_dynamic, 0x0330); // correct
+					// cprint_hex_dword((unsigned long)((byte *)p_current->memory_records[i].p_dynamic + sizeof(MemoryRecord*)), 0x0340); // magically incorrect...? sizeof(MemoryRecord *)
+					// cprint_hex_dword((unsigned long)sizeof(MemoryRecord *), 0x0240); // correct
 					
 					return ((byte *)p_current->memory_records[i].p_dynamic + sizeof(MemoryRecord*));
 				}
@@ -224,13 +224,13 @@ void initialize_block(MemoryBlock * p_block, MemoryBlock * p_prev)
 */
 void free(void * p_memory) 
 {
-	cprint_hex_dword((unsigned long)p_memory, 0x0510);
+	// cprint_hex_dword((unsigned long)p_memory, 0x0510);
 	DynamicMemory * p_dynamic = (DynamicMemory *)((byte *)p_memory - sizeof(MemoryRecord *));
-	cprint_hex_byte(~MEMORY_ALLOCATED, 0x0200);
-	cprint_hex_dword((unsigned long)p_dynamic, 0x0520);
+	// cprint_hex_byte(~MEMORY_ALLOCATED, 0x0200);
+	// cprint_hex_dword((unsigned long)p_dynamic, 0x0520);
 	p_dynamic->p_record->flags &= ~MEMORY_ALLOCATED;
-	cprint_hex_byte(p_dynamic->p_record->flags, 0x0210);
-	cprint_hex_dword((unsigned long)p_dynamic->p_record, 0x0530);
+	// cprint_hex_byte(p_dynamic->p_record->flags, 0x0210);
+	// cprint_hex_dword((unsigned long)p_dynamic->p_record, 0x0530);
 }
 
 void kill(void * p_memory)

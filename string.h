@@ -16,7 +16,7 @@ class String
 		bool Startswith(const String & rhs) const;
 		String & Upper();
 		String & Lower();
-		Array<String> Split() const; 
+		Array<String> Split(char split_on = '\0') const; 
 		String Substring(int start_index, int end_index) const;
 		inline unsigned int Length() const { return n_length; }
 		String & operator = (const String & rhs);
@@ -25,6 +25,7 @@ class String
 		String & operator += (const String & rhs);
 		char & operator [] (int index) const;
 		bool IsWhitespace(char x) const;
+		inline char * GetCString() { return p_char_string; }
 		~String();
 	private:
 		unsigned int calculate_length(const char * const p_chars) const;

@@ -163,7 +163,7 @@ String String::Substring(int start_index, int end_index) const
 	return result;
 }
 
-Array<String> String::Split() const
+Array<String> String::Split(char split_on) const
 {
 	Array<String> result;
 	
@@ -171,15 +171,28 @@ Array<String> String::Split() const
 	
 	for(unsigned int i = 0; i < n_length; i++)
 	{
-		if(!IsWhitespace(p_char_string[i]) && current_start == -1)
+		if(!split_on && !IsWhitespace(p_char_string[i]) && current_start == -1)
 		{
 			current_start = i;
 		}
-		else if(current_start != -1 && IsWhitespace(p_char_string[i]))
+		else if(!split_on && current_start != -1 && IsWhitespace(p_char_string[i]))
 		{
 			result.append(Substring(current_start, i));
 			current_start = -1;
 		}
+		else if(split_on && p_char_string[i] == split_on && current_start == -1)
+		{
+			current_start = i;
+		}
+		else if(split_on && current_start != -1 && p_char_string[i] == split_on)
+		{
+			result.append(Substring(current_start, i));
+			current_start = -1;
+		}
+	}
+	if(current_start != -1 && current_start < n_length)
+	{
+		result.append(Substring(current_start, n_length));
 	}
 	
 	return result;

@@ -36,7 +36,7 @@ byte ATADrive::ReadSector(qword sector_number, void * data)
     }
     return 1;
 }
-byte ATADrive::ReadSectors(qword sector_number, dword read_size, void * data)
+byte ATADrive::ReadSectors(qword sector_number, void * data, dword read_size)
 {
     if(ctrl_drive != 0xff)
     {
@@ -52,7 +52,7 @@ byte ATADrive::WriteSector(qword sector_number, void * data)
     }
     return 1;
 }
-byte ATADrive::WriteSectors(qword sector_number, dword write_size, void * data)
+byte ATADrive::WriteSectors(qword sector_number, void * data, dword write_size)
 {
     if(ctrl_drive != 0xff)
     {

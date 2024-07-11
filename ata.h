@@ -103,9 +103,9 @@ class ATADrive
 		inline qword GetSectorCount() const { return num_sectors; }
 		
 		byte ReadSector(qword sector_number, void * data);
-		byte ReadSectors(qword sector_number, dword read_size, void * data);
+		byte ReadSectors(qword sector_number, void * data, dword read_size);
 		byte WriteSector(qword sector_number, void * data);
-		byte WriteSectors(qword sector_number, dword write_size, void * data);
+		byte WriteSectors(qword sector_number, void * data, dword write_size);
 		
 		ATADriveData * GetDriveData();
 		~ATADrive();

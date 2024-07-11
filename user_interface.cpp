@@ -2,12 +2,15 @@
 #include "etui/EFrame.h"
 #include "ata.h"
 #include "msfat.h"
+#include "string.h"
 
 extern "C" dword eshell_entry(int rows, int cols);
 extern "C" void set_getchar_print(byte);
 extern "C" void pit_set_print(byte);
 extern "C" void rtc_toggle_display();
 extern "C" byte getchar_pressed();
+extern "C" void cprintline(const char * out_string, unsigned int position);
+extern "C" void print_string(const char * out_string, unsigned int position);
 
 byte run_ata_test()
 {
@@ -29,6 +32,20 @@ byte run_ata_test()
 	delete [] data;
 
 	return 1;
+}
+
+void run_split_test(char * split_string)
+{
+	const char * top_string = "Running split test: ";
+	print_string(top_string, 0x0100);
+	
+	String new_str(split_string);
+	Array<String> split_array = new_str.Split();
+	for(int i = 0; i < split_array.size(); i++)
+	{
+		print_string(split_array[i].GetCString(), ((i + 2) << 8));
+	}
+	
 }
 
 dword eshell_entry(int rows, int cols)

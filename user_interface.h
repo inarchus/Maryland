@@ -13,6 +13,9 @@ extern "C" void __fastcall hex_dump(unsigned char * starting_address);
 
 extern "C" dword eshell_entry(int rows, int cols);
 extern "C" byte run_ata_test();
+extern "C" void run_split_test(char * split_string);
+
+void run_split_test(char * split_string);
 
 dword eshell_entry(int rows, int cols);
 

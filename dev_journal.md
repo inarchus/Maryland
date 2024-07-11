@@ -124,3 +124,8 @@ That's all fixed just now, but the real problem is that when I hexdump a000 in r
 
 Ok, I've bodged the rest of the tracks and sectors together and loaded them at boot.  Amazingly I've been able to get the current version working (with the exception for whatever reason of the RTC) on my pentium 4 downstairs.  This for me is a great accomplishment, since the real metal was more finicky than all of the emulations.  Even though it's cost me a few days of forward progress on the underlying software, actually running it on a real computer is probably a good sacrifice of time. As I say, the real time clock doesn't work.  You may ask why and I don't know yet, it may have to do with the fact that I pulled the CR2032 battery while I was trying to get the computer to boot again after repeatedly installing a bad ram stick in many different configurations.  But when it's powered on, it shouldn't need the battery, right? We'll find out.
 
+7 July 2024
+=============
+Ran into hardware problems on the old pcs, should shift back to development until I solve them.  Currently it's the same problems, finishing the ATA-FAT32 driver and getting the eshell text interface working so that we can display data in a far better way.  
+
+I did however finish writing up a new primary stage bootloader for a hard drive, fixed the secondary stage so that it works with both hard drives and floppy disks, write some python scripts which allow the vmdk file we're using to be formatted with fat32 at least in the boot sector and FSI (sector 1 extra info).  The rest of the formatting has yet to be done and actually writing files and directories seems far off but maybe we can get it done quickly.  

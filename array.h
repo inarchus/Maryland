@@ -10,7 +10,7 @@ class Array
 		
 		Array<t> & operator = (const Array<t> & rhs);
 		bool operator == (const Array<t> & rhs) const;
-		void append(const t & new_item);
+		Array<t> & append(const t & new_item);
 		t & operator [] (unsigned int index);
 		
 		inline unsigned int size() const;

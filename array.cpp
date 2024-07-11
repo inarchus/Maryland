@@ -54,7 +54,7 @@ bool Array<t>::operator == (const Array<t> & rhs) const
 }
 
 template<typename t>
-void Array<t>::append(const t & new_item)
+Array<t> & Array<t>::append(const t & new_item)
 {
 	if (n_size < n_capacity)
 	{
@@ -72,6 +72,7 @@ void Array<t>::append(const t & new_item)
 		delete p_array;
 		p_array = new_array;
 	}
+	return *this;
 }
 
 template<typename t>

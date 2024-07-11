@@ -24,6 +24,26 @@ char BootSector16::fat_12[9] = FAT12_STRING;
 char BootSector16::fat_16[9] = FAT16_STRING;
 char BootSector32::fat_32[9] = FAT32_STRING;
 
+FileDescriptor & FileDescriptor::operator = (const FileDescriptor & rhs)
+{
+	for(int i = 0; i < 11; i++)
+	{
+		name[i] = rhs.name[i];
+	}
+
+	attributes = rhs.attributes;
+	nt_reserved = rhs.nt_reserved;
+	creation_time_tenths = rhs.creation_time_tenths; 	// value between 0 <= tenths <= 199
+	creation_time = rhs.creation_time;
+	creation_date = rhs.creation_date;
+	last_access_date = rhs.last_access_date;
+	starting_cluster_high_word = rhs.starting_cluster_high_word;	// 
+	modified_time = rhs.modified_time;
+	modified_date = rhs.modified_date;
+	starting_cluster_low_word = rhs.starting_cluster_low_word;		// 
+	size = rhs.size;							// size in bytes of the directory described, unknown exactly how this is to be calculated
+}
+
 FATPartition::FATPartition(byte controller, byte drive)
 	: p_ata(new ATADrive(controller, drive))
 {
@@ -124,18 +144,75 @@ byte FATPartition::FormatDrive(byte fat_type, char * volume_name, byte * boot_se
 		dword fat_location = system_clusters + reserved_clusters + i * num_fat_tables * fat_table_clusters;
 		CreateFileAllocationTable(fat_location, fat_table_clusters, cluster_size);
 	}
-	
-	CreateRootDirectory();
 
 	delete [] p_boot_sector;
 	return 1;
 }
 
-byte FATPartition::CreateRootDirectory()
+dword FATPartition::ReadDirectoryStructure(DirectoryInformation & current_directory, const String & path)
 {
-	return 0;
+	Array<String> split_path = path.Split('/');
+	String current_path = "/";
+	bool found_next_step;
+
+	dword next_cluster = ParseDirectoryInformation(current_directory, root_cluster); // need to give the root_cluster number so that 
+
+	for(int i = 0; i < split_path.size(); i++)
+	{
+		found_next_step = false;
+		for(int j = 0; j < current_directory.size(); j++)
+		{
+			if(current_directory[i].IsDirectory() && current_directory[i].GetName().Lower() == split_path[i].Lower())
+			{
+				next_cluster = ParseDirectoryInformation(current_directory, current_directory[i].GetStartingCluster()); // need to give the root_cluster number so that we can get there.
+				found_next_step = true;
+			}
+		}
+		if(!found_next_step)
+		{
+			// invalid directory
+			break;
+		}
+	}
+
+	return next_cluster;
 }
 
+dword FATPartition::ParseDirectoryInformation(DirectoryInformation & dir_info, dword cluster)
+{
+	// need to read the initial cluster and also the FAT for the next cluster to read
+	// read all clusters in the directory structure, make an array of cluster numbers
+	// load the clusters into memory
+	byte * cluster_data = new byte[cluster_size];
+	dword next_cluster = cluster;
+
+	// any cluster number higher than 0xfffffff8 is considered invalid, any cluster under the root cluster is either in 
+	//		a FAT or in the reserved or boot clusters at the start of the drive.
+	while(next_cluster < 0xFFFFFFF8 && next_cluster >= root_cluster)
+	{
+		next_cluster = ReadCluster(cluster, cluster_data);
+		for(int i = 0; i < bytes_per_sector * sectors_per_cluster; i+=32)
+		{
+			dir_info.AddTableEntry((FileDescriptor *)((byte *)cluster_data + i));
+		}
+	}
+	return 1;
+}
+
+/*
+	Reads a cluster and determines the location of the next cluster in the primary FAT
+		We should add the capability to check the secondary FAT in case of problems.
+*/
+dword FATPartition::ReadCluster(dword cluster, byte * cluster_data)
+{
+	dword * sector_data = new dword[sector_size / 4];
+	// read the sector in the primary FAT that contains the next cluster after this one.
+	p_ata->ReadSector(root_cluster * sectors_per_cluster + (cluster * 4) / (bytes_per_sector * sectors_per_cluster), sector_data);
+	// read the actual sectors
+	p_ata->ReadSectors(cluster * sectors_per_cluster, cluster_data, sectors_per_cluster);
+	// this is the location of the next cluster that contains the directory info.  
+	return sector_data[(4 * cluster) % (bytes_per_sector * sectors_per_cluster)];
+}
 
 /*
 	FATPartition::CreateFileAllocationTable

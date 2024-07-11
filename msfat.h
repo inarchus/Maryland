@@ -142,43 +142,53 @@ namespace msfat
 			dword trail_signature;
 	};
 
-	struct FileDescriptor
+	enum DirectoryAttribute {ATTR_READ_ONLY = 0x01, ATTR_HIDDEN = 0x02, ATTR_SYSTEM = 0x04, ATTR_VOLUME_ID = 0x08, ATTR_DIRECTORY = 0x10, ATTR_ARCHIVE = 0x20};
+
+	struct __attribute__((packed)) FileDescriptor
 	{
 		public:
 			FileDescriptor() : nt_reserved(0) {}
-			
-			char name[11];
+			inline bool IsReadOnly() {return attributes & ATTR_READ_ONLY; }
+			inline bool IsHidden() {return attributes & ATTR_HIDDEN; }
+			inline bool IsSystem() {return attributes & ATTR_SYSTEM; }
+			inline bool IsDirectory() {return attributes & ATTR_DIRECTORY; }
+			inline bool IsModified() {return attributes & ATTR_ARCHIVE; } // use modified rather than archive because it doesn't make sense without explanation.
+			inline bool HasVolumeID() {return attributes & ATTR_VOLUME_ID; }
+			inline String GetName() {return String(name); }
+			inline dword GetStartingCluster() { return (starting_cluster_high_word << 16) + starting_cluster_low_word; }
+			FileDescriptor & operator = (const FileDescriptor & rhs);
+			char name[11]; // 8.3 format adding up to 11 characters total
 			byte attributes;
 			byte nt_reserved;
 			byte creation_time_tenths; 	// value between 0 <= tenths <= 199
 			word creation_time;
 			word creation_date;
 			word last_access_date;
-			word starting_cluster_high_word;
+			word starting_cluster_high_word;	// 
 			word modified_time;
 			word modified_date;
-			word starting_cluster_low_word;
-			dword size;							// size in bytes of the directory described
+			word starting_cluster_low_word;		// 
+			dword size;							// size in bytes of the directory described, unknown exactly how this is to be calculated
 	};
 
-
-	struct DirectoryDescriptor : public FileDescriptor
+	class DirectoryInformation : private FileDescriptor
 	{
 		public:
-	};
-
-	class Directory
-	{
-		public:
-
+			inline bool IsReadOnly() {return attributes & ATTR_READ_ONLY; }
+			inline bool IsHidden() {return attributes & ATTR_HIDDEN; }
+			inline bool IsSystem() {return attributes & ATTR_SYSTEM; }
+			inline bool IsDirectory() {return attributes & ATTR_DIRECTORY; }
+			inline bool IsModified() {return attributes & ATTR_ARCHIVE; } // use modified rather than archive because it doesn't make sense without explanation.
+			inline bool HasVolumeID() {return attributes & ATTR_VOLUME_ID; }
+			inline String GetName() {return String(name); }
+			inline void AddTableEntry(FileDescriptor * p_fd) { descriptors.append(*p_fd); }
+			inline FileDescriptor & operator[] (int index) {return descriptors[index]; }
+			inline unsigned int size() {return descriptors.size(); }
 		private:
-			String path;
-			String name;
-			DirectoryDescriptor descriptor;
-			Array<String> subdirectories;
-			Array<String> files;
+			// inherits the data from a FileDescriptor object (32 bytes)
+			Array<FileDescriptor> descriptors;
 	};
-	
+
 	class FileStream;
 
 	class FATPartition
@@ -197,8 +207,9 @@ namespace msfat
 			
 			dword CreateDirectory(String path);
 			dword DeleteDirectory(String path);
-
-			dword ReadDirectoryStructure(String path, Directory & dir);
+			
+			dword ReadDirectoryStructure(DirectoryInformation & current_directory, const String & path);
+			dword ParseDirectoryInformation(DirectoryInformation & dir_info, dword cluster);
 			
 			FileStream & OpenFile(String path);
 			byte CloseFile(FileStream & fs);
@@ -212,11 +223,17 @@ namespace msfat
 			byte PopulateBootSector16(BootSector16 * boot_sector, char * volume_name, byte * boot_sector_code, dword cluster_count, dword cluster_size, dword num_fat_tables, dword reserved_size, dword volume_id);
 			byte PopulateFileSystemInfo(FileSystemInformation * p_fsi, dword cluster_count, dword cluster_size, dword num_fat_tables, dword reserved_size);
 
-			byte CreateRootDirectory();
+			dword ReadCluster(dword cluster, byte * cluster_data);
+
 			ATADrive * p_ata; // drive that the partition lives on.
+
+			// perform sanity checks on the boot sector data before assigning it to these variables
+			dword cluster_size, bytes_per_sector, sectors_per_cluster, root_cluster;
 
 			BootSector * p_boot_sector; 	// we'll read sector 0 and load the sector data here 
 			FileSystemInformation * p_fsi;	// we'll also load the file system information here so that we can
+
+			DirectoryInformation current_directory; 
 
 			qword q_sectors;
 			

@@ -73,4 +73,5 @@ inline void cprint_hex_word(unsigned short word, unsigned int position);
 inline void cprint_hex_dword(unsigned int dword, unsigned int position);
 
 extern byte run_ata_test();
+extern void run_split_test(char * split_string);
 #endif 

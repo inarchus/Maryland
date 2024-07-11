@@ -74,6 +74,10 @@ void main_shell(char * in_string)
 		{
 			run_ata_test();
 		}
+		else if(startswith(in_string, "test split"))
+		{
+			run_split_test(in_string);
+		}
 		else if(cstrings_equal(in_string, "cpuid"))
 		{
 			display_cpuid();

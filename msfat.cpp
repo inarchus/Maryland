@@ -6,6 +6,7 @@
 extern "C" void memory_copy(void * destination, void * source, dword size);
 extern "C" void memory_set(void * block, dword size, byte set_byte);
 extern "C" int cstrings_equal(char * str1, char * str2);
+extern "C" void __fastcall zero_memory(void * p_block, dword size);
 
 #define FAT32_BOOT_SECTOR_SIZE32 	330
 #define FAT32_FSI_SECTOR_LOCATION 	1
@@ -42,6 +43,7 @@ FileDescriptor & FileDescriptor::operator = (const FileDescriptor & rhs)
 	modified_date = rhs.modified_date;
 	starting_cluster_low_word = rhs.starting_cluster_low_word;		// 
 	size = rhs.size;							// size in bytes of the directory described, unknown exactly how this is to be calculated
+	return *this;
 }
 
 FATPartition::FATPartition(byte controller, byte drive)
@@ -152,7 +154,6 @@ byte FATPartition::FormatDrive(byte fat_type, char * volume_name, byte * boot_se
 dword FATPartition::ReadDirectoryStructure(DirectoryInformation & current_directory, const String & path)
 {
 	Array<String> split_path = path.Split('/');
-	String current_path = "/";
 	bool found_next_step;
 
 	dword next_cluster = ParseDirectoryInformation(current_directory, root_cluster); // need to give the root_cluster number so that 
@@ -235,9 +236,147 @@ byte FATPartition::CreateFileAllocationTable(dword fat_location, dword fat_table
     return 1;
 }
 
-dword FATPartition::CreateDirectory(String path)
+dword FATPartition::WriteCluster(dword cluster, byte * cluster_data)
 {
+	p_ata->WriteSectors(cluster * sectors_per_cluster, cluster_data, sectors_per_cluster);
+	return 1;
+}
+
+#define CREATE_DIRECTORY_SUCCESS		1
+#define DUPLICATE_DIRECTORY 			2
+#define CREATE_DIRECTORY_ILLEGAL_NAME	3
+
+dword FATPartition::CreateDirectory(String path, String directory_name)
+{
+	if(directory_name.Length() > 11)
+	{
+		return CREATE_DIRECTORY_ILLEGAL_NAME;
+	}
+	DirectoryInformation dir_info;
+	dword last_cluster = ReadDirectoryStructure(dir_info, path);
+	for(int i = 0; i < dir_info.size(); i++)
+	{
+		if (dir_info[i].GetName().Lower() == directory_name.Lower())
+		{
+			return DUPLICATE_DIRECTORY;
+		}
+	}
+	byte * cluster_data = new byte[cluster_size];
+	ReadCluster(last_cluster, cluster_data);
+	FileDescriptor * p_fd = (FileDescriptor *)cluster_data;
+	dword next_free_cluster = GetNextFreeCluster();
+	bool new_slot_found = false;
+	for(int dir_segment = 0; dir_segment < cluster_size; dir_segment+=32)
+	{
+		cluster_data += 1; // go to the next file descriptor
+		if(p_fd->GetName()[0] == '\0')
+		{
+			for(int copy_string = 0; copy_string < 11; copy_string++)
+			{
+				p_fd->name[copy_string] = directory_name[copy_string];
+			}
+			p_fd->attributes = ATTR_DIRECTORY;
+			p_fd->starting_cluster_high_word = next_free_cluster >> 16;
+			p_fd->starting_cluster_low_word = next_free_cluster & 0xFFFF;
+			p_fd->size = cluster_size;
+			new_slot_found = true;
+		}
+	}
+	dword parent_directory_cluster = dir_info.GetStartingCluster();
+	if(!new_slot_found)
+	{
+		AllocateCluster(parent_directory_cluster, next_free_cluster);
+		p_fsi->next_free_cluster = GetNextFreeCluster();
+		p_ata->WriteSector(1, p_fsi);
+		p_ata->WriteSector(7, p_fsi);
+	}	
+
+	zero_memory(cluster_data, cluster_size);
+	WriteDotDirectories(parent_directory_cluster, next_free_cluster, (FileDescriptor*)cluster_data);
+
+	// add . and .. to the new directory
+	WriteCluster(next_free_cluster, cluster_data);
+
+	delete [] cluster_data;
+
+	return CREATE_DIRECTORY_SUCCESS;
+}
+
+dword FATPartition::GetNextFreeCluster(dword start_cluster)
+{
+	dword next_free_cluster;
+	if(!start_cluster)
+	{
+		next_free_cluster = p_fsi->next_free_cluster;
+	}
+	else
+	{
+		next_free_cluster = start_cluster;
+	}
+
+	dword starting_fat_sector = ((BootSector32*)p_boot_sector)->num_reserved_sectors;
+	dword number_fats = ((BootSector32*)p_boot_sector)->number_fats;
+	// first we'll check the sector that the fsi claims to be the next free cluster.
+	if(CheckClusterFree(next_free_cluster))
+	{
+		p_fsi->next_free_cluster = GetNextFreeCluster(next_free_cluster + 1);
+		return next_free_cluster;
+	}
+
+
+	// this is actually a little bit messy, first we have to check the FSI if it knows the next available sector.  If it's set incorrectly then we have to recover it.
+	// 
+
 	return 0;
+}
+
+byte FATPartition::CheckClusterFree(dword cluster)
+{	
+	// if the cluster is not in the allocatable region, refuse to allocate.
+	if(cluster < root_cluster)
+	{
+		return 0;
+	}
+	dword * sector_data = new dword[bytes_per_sector / 4];
+	// check the cluster in the fat table to see if it's 0x0 or something else.  If it's something else, then it's used.  
+	p_ata->ReadSector(num_reserved_sectors + (4 * cluster) / (bytes_per_sector), sector_data);
+	
+	if(sector_data[(4 * cluster) % bytes_per_sector] == 0x0)
+	{
+		delete [] sector_data;
+		return true;
+	}
+
+	delete [] sector_data;
+	return false;
+}
+
+byte FATPartition::AllocateCluster(dword parent_directory_cluster, dword next_free_cluster)
+{
+	dword * sector_data = new dword[bytes_per_sector / 4];
+	// check the cluster in the fat table to see if it's 0x0 or something else.  If it's something else, then it's used.  
+	p_ata->ReadSector(num_reserved_sectors + (4 * parent_directory_cluster) / (bytes_per_sector), sector_data);
+	sector_data[(4 * parent_directory_cluster) % bytes_per_sector] = next_free_cluster;
+	p_ata->WriteSector(num_reserved_sectors + (4 * parent_directory_cluster) / (bytes_per_sector), sector_data);
+
+	p_ata->ReadSector(num_reserved_sectors + (4 * next_free_cluster) / (bytes_per_sector), sector_data);
+	sector_data[(4 * next_free_cluster) % bytes_per_sector] = 0xffffffff; // this signals the end of the directory or file
+	p_ata->WriteSector(num_reserved_sectors + (4 * next_free_cluster) / (bytes_per_sector), sector_data);
+	delete [] sector_data;
+	return 1;
+}
+
+
+byte FATPartition::WriteDotDirectories(dword parent_directory_cluster, dword next_free_cluster, FileDescriptor * cluster_data)
+{
+
+	// ensure that the current cluster is zero.
+	for(int i = 64; i < cluster_size; i+=32)
+	{
+		zero_memory(cluster_data++, 32);
+	}
+	//WriteCluster();
+	return 1;
 }
 
 dword FATPartition::DeleteDirectory(String path)

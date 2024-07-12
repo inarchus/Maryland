@@ -6,7 +6,6 @@ The primary goal of this project is to learn.  I have always wanted to create an
 *	The goal is to learn about all of the ways in which the operating system interacts with hardware.  I feel like UEFI takes away from that significantly.  
 *	Primarily I am using QEMU for testing, as it runs quickly in WSL2-Ubuntu and allows quick compilation and restarting since the operating system is so small. 
 *	I've also used VirtualBox and VMWare Workstation to test the differences between virutal machines and their interaction with the OS.  
-*	
 
 What You Need
 ============
@@ -29,6 +28,13 @@ PATH_TO_VMDK_HDA = [insert your path to the hard drive image here]
 If you want to create a hard drive image you can use:
 *	make vmdk-disk
 This will create a 40 MB flat (allocated and set to zero) vmdk file which QEMU and VMWare can use.  
+
+Running the Project
+============
+In order to run from a virtual floppy you can run:
+*	make fdd && make run
+In order to run from the virtual hard drive, you can run:
+*	make hdd && make run-hdd
 
 Development Journal
 ============

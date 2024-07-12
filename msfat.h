@@ -174,16 +174,17 @@ namespace msfat
 	class DirectoryInformation : private FileDescriptor
 	{
 		public:
-			inline bool IsReadOnly() {return attributes & ATTR_READ_ONLY; }
-			inline bool IsHidden() {return attributes & ATTR_HIDDEN; }
-			inline bool IsSystem() {return attributes & ATTR_SYSTEM; }
-			inline bool IsDirectory() {return attributes & ATTR_DIRECTORY; }
-			inline bool IsModified() {return attributes & ATTR_ARCHIVE; } // use modified rather than archive because it doesn't make sense without explanation.
-			inline bool HasVolumeID() {return attributes & ATTR_VOLUME_ID; }
+			inline bool IsReadOnly() const {return attributes & ATTR_READ_ONLY; }
+			inline bool IsHidden() const {return attributes & ATTR_HIDDEN; }
+			inline bool IsSystem() const {return attributes & ATTR_SYSTEM; }
+			inline bool IsDirectory()const  {return attributes & ATTR_DIRECTORY; }
+			inline bool IsModified() const {return attributes & ATTR_ARCHIVE; } // use modified rather than archive because it doesn't make sense without explanation.
+			inline bool HasVolumeID() const {return attributes & ATTR_VOLUME_ID; }
 			inline String GetName() {return String(name); }
 			inline void AddTableEntry(FileDescriptor * p_fd) { descriptors.append(*p_fd); }
 			inline FileDescriptor & operator[] (int index) {return descriptors[index]; }
-			inline unsigned int size() {return descriptors.size(); }
+			inline unsigned int size() const {return descriptors.size(); }
+			inline dword GetStartingCluster() const { return (starting_cluster_high_word << 16) + starting_cluster_low_word; }
 		private:
 			// inherits the data from a FileDescriptor object (32 bytes)
 			Array<FileDescriptor> descriptors;
@@ -205,7 +206,7 @@ namespace msfat
 			
 			qword GetFileSize(String path);
 			
-			dword CreateDirectory(String path);
+			dword CreateDirectory(String path, String directory_name);
 			dword DeleteDirectory(String path);
 			
 			dword ReadDirectoryStructure(DirectoryInformation & current_directory, const String & path);
@@ -224,11 +225,19 @@ namespace msfat
 			byte PopulateFileSystemInfo(FileSystemInformation * p_fsi, dword cluster_count, dword cluster_size, dword num_fat_tables, dword reserved_size);
 
 			dword ReadCluster(dword cluster, byte * cluster_data);
+			dword WriteCluster(dword cluster, byte * cluster_data);
+			byte WriteDotDirectories(dword parent_directory_cluster, dword next_free_cluster, FileDescriptor * cluster_data);
+
+			byte AllocateCluster(dword parent_directory_cluster, dword next_free_cluster);
+			dword GetNextFreeCluster(dword start_cluster = 0);
+			byte CheckClusterFree(dword cluster);
 
 			ATADrive * p_ata; // drive that the partition lives on.
 
 			// perform sanity checks on the boot sector data before assigning it to these variables
 			dword cluster_size, bytes_per_sector, sectors_per_cluster, root_cluster;
+			byte num_fats;
+			dword num_reserved_sectors;
 
 			BootSector * p_boot_sector; 	// we'll read sector 0 and load the sector data here 
 			FileSystemInformation * p_fsi;	// we'll also load the file system information here so that we can

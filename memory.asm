@@ -29,9 +29,22 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 extern memory_set
 extern memory_copy
+extern zero_memory
 
 section .text
 
+zero_memory:
+	; pointer to mem, value to set, size of mem, __fastcall ecx = pointer to memory, edx = size
+	push ebp
+	mov ebp, esp
+	push edi
+	push ecx
+	push eax
+
+	mov edi, ecx	; fast call parameters
+	mov ecx, edx	; 
+	mov al, 0
+	jmp memset_zero_start
 
 memory_set:
 	; pointer to mem
@@ -47,6 +60,8 @@ memory_set:
 	mov al, [ebp + 8]		;	value, needs to be a single byte
 	mov ecx, [ebp + 4]		;	size to set
 	
+	memset_zero_start:
+	
 	mov ah, al				; make four copies of al eax = [al, al, al, al]
 	shl eax, 8
 	mov al, ah
@@ -54,15 +69,16 @@ memory_set:
 	mov al, ah
 	
 	shr ecx, 2 				; divide by 4 so that we don't copy byte by byte
-	memset_loop:
+	.memset_loop:
 		stosd
-	loop memset_loop
+		dec ecx
+	jnz .memset_loop
 	
 	mov ecx, [ebp + 4]
 	and ecx, 3				; get the remainder when divided by 4 and execute that many more times.  
-	memset_byte_loop:
+	.memset_byte_loop:
 		stosb
-	loop memset_byte_loop
+	loop .memset_byte_loop
 	
 	pop eax
 	pop ecx
